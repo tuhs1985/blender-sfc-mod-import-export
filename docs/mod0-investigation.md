@@ -66,6 +66,14 @@ The user confirmed that these markers are workable. A subsequent `output/fca-tex
 
 `fca_brk.mod` (SHA-256 `0f4c91452039c628daefd339585689f46ec5c152e55368776d8f476260bb6a4c`) has one `MOD0` with 351 vertex records and 661 polygons. Its `PNTS` payload is 112 bytes, consistent with seven 16-byte records, and `STRS` contains seven names from `fca_brk_1pivot` through `fca_brk_7pivot`. The association between those records, pivot names and geometry sections still needs decoding. These files provide an OP multi-LOD reference, not proof of behavior for every OP model.
 
+In this break model, the upper 16 bits of each corner's first word form seven contiguous groups with IDs 0–6. All corners of each polygon agree on the ID. Their ranges are `(first polygon, count)`: `(0, 420)`, `(420, 36)`, `(456, 28)`, `(484, 48)`, `(532, 35)`, `(567, 62)`, `(629, 32)`. The R4 importer's `100024c0` uses this upper half-word when splitting contiguous geometry, supporting a piece identifier interpretation. Seven pivot records occur in the same order as the names `1pivot`–`7pivot`; mapping IDs 0–6 to those points in order is a plausible, not yet independently proven, association.
+
+The local `output/fca-break-preview.blend` uses that provisional association to create seven separate objects with their origins at those pivot positions. Blender readback confirms seven meshes and 661 polygons. This untextured experimental preview needs a visual and game-behavior check; do not treat its pivot mapping as verified or assume other break models use identical numbering.
+
+## Material table comparison
+
+The installed OP FCA has unused untextured entries at indices 0–2, but the local `fca_sfc1.MOD` and `fca_sfc2.MOD` each use index 1 (`misc2`) for 394 polygons and index 2 (`defrim`) for 48 polygons. Index 0 is unused in those samples. Material entries and indices must be preserved per file; the first three slots are not universally filler.
+
 The captured F-CA Blender fixture also has 6,370 triangles, but matching counts do not prove identical input geometry or ordering. The break runtime capture reports 3,497 shared positions, distinct from the 6,766 records observed in this particular local break file; these must not be assumed to be equivalent assets or representations.
 
 ## Next investigation
