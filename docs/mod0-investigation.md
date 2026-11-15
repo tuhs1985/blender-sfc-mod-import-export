@@ -79,3 +79,7 @@ The captured F-CA Blender fixture also has 6,370 triangles, but matching counts 
 ## Next investigation
 
 Verify coordinate conversion and corner-normal behavior against controlled Blender/game comparisons. Decode the FCA LOD distances, remaining material flags and break-pivot associations. Build synthetic tests for each proven field before exposing it as an importer feature; do not apply the Remix adapter's UV conversion to MOD data without direct evidence.
+
+## Smoothing and hard edges
+
+The user reports that SFC does not handle smoothing groups well in their experience. Their established workaround is to detach faces at smoothing boundaries so smoothing is limited to contiguous geometry. Preserve this as an exporter design and testing concern: investigate stored corner normals, vertex sharing, Blender sharp edges and OP rendering before deciding how to represent or split boundaries. Test the user's existing workflow and any automated equivalent in OP; do not silently change mesh topology or assume smoothing-group flags alone reproduce the desired appearance.
