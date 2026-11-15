@@ -18,6 +18,9 @@ context: |
   The user confirmed that rotating the FCA preview +90 degrees about Blender's
   X axis gives the desired visual orientation. Apply the same transform to FCA
   geometry and markers; verify broader models and export round trips.
+  Do not impose a BMP-only or game-specific texture-format restriction on
+  importer or exporter assignments. Preserve user-selected references; the
+  artist decides which textures to use. Actual in-game support is separate.
 
 # Project context (optional)
 # Add only constraints that should guide OpenSpec artifacts and workflows.
