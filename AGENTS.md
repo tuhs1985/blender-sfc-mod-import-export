@@ -7,3 +7,5 @@ Use the available Codex Superpowers skills when applicable, alongside OpenSpec. 
 Maintain project notes in the Obsidian vault folder `02 - Projects/Coding Projects/Blender SFC MOD Import Export`, using the available Obsidian skills and CLI. The repository remains the source of truth for code, OpenSpec artifacts, and technical evidence.
 
 The existing format research is in `docs/reverse-engineering.md` and `docs/remix-reference.md`. Treat unverified interpretations as hypotheses and keep game-derived fixtures and third-party binaries out of Git unless redistribution is authorized.
+
+Target Starfleet Command: Orion Pirates. Treat SFC3-specific features and workflows as out of scope unless the user requests them.

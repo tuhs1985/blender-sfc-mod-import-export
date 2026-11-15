@@ -1,6 +1,6 @@
 # Blender SFC MOD Import/Export
 
-This project aims to create a Blender add-on for importing and exporting Starfleet Command `.mod` models. It is at the research stage: there is no working Blender importer or exporter yet.
+This project aims to create a Blender add-on for importing and exporting Starfleet Command: Orion Pirates `.mod` models. It is at the research stage: there is no working Blender importer or exporter yet. SFC3-specific features are outside the current scope.
 
 ## Inspect a MOD container
 
@@ -26,7 +26,7 @@ The documented workflow includes:
 
 These describe user-visible behavior, not a specification of the binary format. The R3 readme contains a contradictory YES/NO instruction for standard versus break-up export; the R4 readme says YES for a standard model and NO for a break-up model.
 
-See [reverse engineering](docs/reverse-engineering.md) for the decompilation workflow, [MOD0 investigation](docs/mod0-investigation.md) for geometry research, and [Remix reference evidence](docs/remix-reference.md) for prior model inspection and the locally retained Blender comparison fixture.
+See [model manual notes](docs/model-manual-op-notes.md) for the Orion Pirates scope and relevant modeling concepts, [reverse engineering](docs/reverse-engineering.md) for the decompilation workflow, [MOD0 investigation](docs/mod0-investigation.md) for geometry research, and [Remix reference evidence](docs/remix-reference.md) for prior model inspection and the locally retained Blender comparison fixture.
 
 ## Next steps
 

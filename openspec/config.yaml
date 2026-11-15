@@ -1,7 +1,9 @@
 schema: spec-driven
 
 context: |
-  Build a Blender add-on to import and export Starfleet Command MOD models.
+  Build a Blender add-on to import and export Starfleet Command: Orion Pirates
+  MOD models. SFC3-specific features and workflows are out of scope unless
+  explicitly requested.
   The supplied 3ds Max plugins document SFC2 behavior; support for other game
   versions must be established with evidence. The binary format is under
   investigation. Distinguish verified format behavior from hypotheses and
