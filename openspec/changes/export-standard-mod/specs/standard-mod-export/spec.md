@@ -28,6 +28,14 @@ The exporter SHALL preserve user-selected texture references without requiring a
 - **WHEN** a material references an image named `thisdamntexture.bmp`
 - **THEN** the exporter preserves that reference rather than enforcing a naming pattern
 
+#### Scenario: Texture outside the save directory
+- **WHEN** an assigned texture is outside the selected MOD save directory
+- **THEN** the exporter warns the user that the game may not find it while preserving the texture assignment and allowing export
+
+#### Scenario: Texture in the save directory
+- **WHEN** an assigned texture is in the selected MOD save directory
+- **THEN** the exporter writes its local reference without an outside-directory warning
+
 ### Requirement: Refuse unsafe export
 The exporter SHALL reject unsupported edits and malformed or missing required data rather than silently produce an incomplete model.
 

@@ -22,8 +22,9 @@ context: |
   importer or exporter assignments. Preserve user-selected references; the
   artist decides which textures to use. Actual in-game support is separate.
   The user reports OP searches for textures in the model directory; putting
-  the images beside the exported MOD is recommended. Do not automatically
-  rename, convert or restrict the user's textures.
+  the images beside the exported MOD is recommended. Warn when assigned
+  textures are outside the chosen MOD save directory, but allow export. Do not
+  automatically copy, move, rename, convert or restrict the user's textures.
 
 # Project context (optional)
 # Add only constraints that should guide OpenSpec artifacts and workflows.
