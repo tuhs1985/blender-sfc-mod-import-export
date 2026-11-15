@@ -1,0 +1,135 @@
+bl_info = {
+    'name': 'Starfleet Command OP MOD Import',
+    'author': 'SFC MOD project',
+    'version': (0, 1, 0),
+    'blender': (4, 3, 0),
+    'location': 'File > Import',
+    'description': 'Import observed Orion Pirates MOD models',
+    'category': 'Import-Export',
+}
+
+import math
+import json
+from pathlib import Path
+import bpy
+from bpy.props import StringProperty
+from bpy_extras.io_utils import ImportHelper
+from .mod_format import parse_model
+
+
+def import_model(context, filepath):
+    path = Path(filepath)
+    if path.stem.casefold().endswith('_brk'):
+        raise ValueError('Break-model piece import is not supported yet')
+    model = parse_model(path.read_bytes())
+    available = {p.name.casefold(): p for p in path.parent.iterdir() if p.is_file()}
+    warnings = []
+    collection = bpy.data.collections.new(f'SFC MOD: {path.stem}')
+    context.scene.collection.children.link(collection)
+    materials = []
+    def texture(stem):
+        file = available.get((stem + '.bmp').casefold())
+        if file is None:
+            warnings.append(f'Missing texture: {stem}.bmp')
+            return None
+        return bpy.data.images.load(str(file), check_existing=True)
+    try:
+        for index, source in enumerate(model['materials']):
+            mat = bpy.data.materials.new(f'{path.stem} Material {index:02d}')
+            materials.append(mat)
+            mat['mod_flags'] = source['flags']
+            mat['mod_record_hex'] = source['raw'].hex()
+            mat.use_nodes = True
+            shader = mat.node_tree.nodes.get('Principled BSDF')
+            diffuse = None
+            if source['diffuse']:
+                mat['mod_diffuse_stem'] = source['diffuse']
+                image = texture(source['diffuse'])
+                if image:
+                    diffuse = mat.node_tree.nodes.new('ShaderNodeTexImage')
+                    diffuse.image = image
+                    mat.node_tree.links.new(diffuse.outputs['Color'], shader.inputs['Base Color'])
+            if source['illumination']:
+                mat['mod_illumination_stem'] = source['illumination']
+                image = texture(source['illumination'])
+                if image:
+                    image.colorspace_settings.name = 'Non-Color'
+                    node = mat.node_tree.nodes.new('ShaderNodeTexImage')
+                    node.label = 'OP illumination map'
+                    node.image = image
+                    if diffuse:
+                        mix = mat.node_tree.nodes.new('ShaderNodeMixRGB')
+                        mix.blend_type = 'MULTIPLY'
+                        mix.inputs[0].default_value = 1.0
+                        mat.node_tree.links.new(diffuse.outputs['Color'], mix.inputs[1])
+                        mat.node_tree.links.new(node.outputs['Color'], mix.inputs[2])
+                        mat.node_tree.links.new(mix.outputs['Color'], shader.inputs['Emission Color'])
+                        shader.inputs['Emission Strength'].default_value = 1.0
+        for number, source in enumerate(model['meshes'], 1):
+            mesh = bpy.data.meshes.new(f'{path.stem} LOD {number}')
+            mesh['mod_polygon_records'] = json.dumps([
+                (p['raw_header'] + b''.join(c['raw'] for c in p['corners'])).hex()
+                for p in source['polygons']
+            ])
+            faces = [[p['corners'][i]['index'] for i in (1, 0, 2)] for p in source['polygons']]
+            mesh.from_pydata(source['vertices'], [], faces)
+            mesh.update()
+            uv = mesh.uv_layers.new(name='MOD UV')
+            for mat in materials:
+                mesh.materials.append(mat)
+            for face, poly in zip(mesh.polygons, source['polygons']):
+                face.material_index = poly['material']
+                for loop, i in zip(face.loop_indices, (1, 0, 2)):
+                    uv.data[loop].uv = poly['corners'][i]['uv']
+            obj = bpy.data.objects.new(mesh.name, mesh)
+            collection.objects.link(obj)
+            obj.rotation_euler.x = math.pi / 2
+            obj['mod_lod_index'] = number - 1
+            obj.hide_set(number != 1)
+        for point in model['points']:
+            obj = bpy.data.objects.new(point['name'], None)
+            collection.objects.link(obj)
+            x, y, z = point['position']
+            obj.location = (x, -z, y)
+            obj.empty_display_type = 'SPHERE'
+            obj.empty_display_size = 0.15
+            obj['mod_name'] = point['name']
+            obj['mod_position'] = point['position']
+            obj['mod_string_offset'] = point['name_offset']
+    except Exception:
+        for obj in list(collection.objects):
+            bpy.data.objects.remove(obj, do_unlink=True)
+        bpy.data.collections.remove(collection)
+        raise
+    return warnings
+
+
+class IMPORT_OT_sfc_mod(bpy.types.Operator, ImportHelper):
+    bl_idname = 'import_scene.sfc_mod'
+    bl_label = 'Import SFC OP MOD'
+    filename_ext = '.mod'
+    filter_glob: StringProperty(default='*.mod;*.MOD', options={'HIDDEN'})
+
+    def execute(self, context):
+        try:
+            warnings = import_model(context, self.filepath)
+        except Exception as exc:
+            self.report({'ERROR'}, f'MOD import failed: {exc}')
+            return {'CANCELLED'}
+        if warnings:
+            self.report({'WARNING'}, f'{len(warnings)} texture(s) missing: {warnings[0]}')
+        return {'FINISHED'}
+
+
+def menu_import(self, context):
+    self.layout.operator(IMPORT_OT_sfc_mod.bl_idname, text='Starfleet Command OP (.mod)')
+
+
+def register():
+    bpy.utils.register_class(IMPORT_OT_sfc_mod)
+    bpy.types.TOPBAR_MT_file_import.append(menu_import)
+
+
+def unregister():
+    bpy.types.TOPBAR_MT_file_import.remove(menu_import)
+    bpy.utils.unregister_class(IMPORT_OT_sfc_mod)
