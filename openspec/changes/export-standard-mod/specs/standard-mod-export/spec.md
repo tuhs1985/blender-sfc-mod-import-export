@@ -13,6 +13,21 @@ The exporter SHALL write all supported LODs, named points, material assignments 
 - **WHEN** a supported three-LOD model is exported
 - **THEN** the file contains three ordered LODs and their assigned materials
 
+#### Scenario: One mesh without an LOD name
+- **WHEN** a model collection contains one eligible mesh without an LOD-style name
+- **THEN** it exports as a single LOD without requiring a rename
+
+#### Scenario: Ambiguous mesh ordering
+- **WHEN** a model collection contains multiple eligible meshes without a clear LOD order
+- **THEN** export reports the ambiguity rather than guessing
+
+### Requirement: Respect artist texture assignments
+The exporter SHALL preserve user-selected texture references without requiring a particular image format or renaming textures.
+
+#### Scenario: Artist-selected image name
+- **WHEN** a material references an image named `thisdamntexture.bmp`
+- **THEN** the exporter preserves that reference rather than enforcing a naming pattern
+
 ### Requirement: Refuse unsafe export
 The exporter SHALL reject unsupported edits and malformed or missing required data rather than silently produce an incomplete model.
 
