@@ -12,6 +12,12 @@ Target: Starfleet Command: Orion Pirates (OP). The supplied `ModelManual.pdf` is
 - **Break models (pages 7–8, 16–18):** A `_brk.mod` is a sectioned destruction model; pieces have individual pivots. The manual marks the initial explosion ordering as new in SFC3, so do not import that ordering rule into OP without separate evidence. Verify OP piece boundaries and pivots from files and its game behavior.
 - **Textures (pages 5–6):** Color and illumination maps predate the SFC3 additions. Naming examples in this SFC3 manual use an `_i` suffix, whereas the supplied SFC II plugin readme describes adding `i` before the extension; actual referenced names and the asset folder are authoritative for individual models. Verify OP handling rather than hard-coding either convention as universal.
 
+## Texture reference encoding check
+
+Read-only inspection of installed OP `fca.mod`, `fca_brk.mod`, `kca.mod`, and the local `fca_sfc2.MOD` found 193 populated diffuse/illumination references in total. All were bare filename stems, with no directory separators or extensions (for example `fca_1_1` and `fca_1_1i`). The R4 exporter at `10002150` calls `_splitpath` and passes only the filename component into its string table; the R4 importer reconstructs paths from the MOD directory and tries `.bmp`, then `.pcx`. This is evidence about the old Max tools and inspected files; it does not by itself prove which formats the OP game engine accepts or that every third-party MOD uses stems.
+
+For a newly selected `thisdamntexture.bmp`, the intended exporter behavior is therefore to write the local stem `thisdamntexture`, not an absolute path or the full `.bmp` filename, and warn when the image is outside the MOD output directory. This does not rename the image or impose a BMP-only rule. Preserve unusual pre-existing references for unchanged round trips; test new references and game behavior before claiming parity.
+
 ## Excluded SFC3-specific features
 
 Dynamic LOD, progressive damage maps, the SFC3 primary/heavy hardpoint-number split, new explosion ordering, and SFC3 UI graphics and metadata are not OP requirements. The manual also labels specular intensity as new for SFC3; do not implement its SFC3 semantics as an OP requirement. General mesh-authoring advice is not a binary format specification.

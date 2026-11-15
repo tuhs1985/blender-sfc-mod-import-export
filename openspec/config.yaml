@@ -19,8 +19,9 @@ context: |
   X axis gives the desired visual orientation. Apply the same transform to FCA
   geometry and markers; verify broader models and export round trips.
   Do not impose a BMP-only or game-specific texture-format restriction on
-  importer or exporter assignments. Preserve user-selected references; the
-  artist decides which textures to use. Actual in-game support is separate.
+  importer or exporter assignments. Preserve the user's image choice while
+  encoding local stems as observed in original MOD files; the artist decides
+  which textures to use. Actual in-game support is separate.
   The user reports OP searches for textures in the model directory; putting
   the images beside the exported MOD is recommended. Warn when assigned
   textures are outside the chosen MOD save directory, but allow export. Do not

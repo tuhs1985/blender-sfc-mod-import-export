@@ -22,11 +22,11 @@ The exporter SHALL write all supported LODs, named points, material assignments 
 - **THEN** export reports the ambiguity rather than guessing
 
 ### Requirement: Respect artist texture assignments
-The exporter SHALL preserve user-selected texture references without requiring a particular image format or renaming textures.
+The exporter SHALL derive local texture stems from user-selected image names without requiring a particular image format or renaming image files.
 
 #### Scenario: Artist-selected image name
 - **WHEN** a material references an image named `thisdamntexture.bmp`
-- **THEN** the exporter preserves that reference rather than enforcing a naming pattern
+- **THEN** the exporter writes the local stem `thisdamntexture` and does not rename or convert the image
 
 #### Scenario: Texture outside the save directory
 - **WHEN** an assigned texture is outside the selected MOD save directory

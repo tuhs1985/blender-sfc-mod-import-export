@@ -28,7 +28,7 @@ Break pieces follow the manual's Max authoring convention: for `kca_brk.mod`, th
 
 Texture references are retained regardless of image format. The importer loads an exact filename or, for an extensionless name, a unique matching image in a format Blender recognizes. Missing, ambiguous, or unreadable images do not prevent model import; assign or replace them in Blender as desired. This is not a claim that OP supports every Blender image format.
 
-The planned exporter follows the same user-directed texture policy: it must not enforce a BMP-only restriction. How to encode and preserve selected references in MOD files still requires implementation and verification.
+The planned exporter follows the same user-directed texture policy: it must not enforce a BMP-only restriction or rename images. Original MOD examples and the old Max exporter use local filename stems without directories or extensions; for example, `thisdamntexture.bmp` is referenced as `thisdamntexture`. The Blender export workflow and game behavior for other image formats still require verification.
 
 For the installed OP reference, select `C:\Program Files (x86)\Taldren Software Inc\Starfleet Command Orion Pirates\Assets\Models\fca\fca.mod` in the import dialog.
 
