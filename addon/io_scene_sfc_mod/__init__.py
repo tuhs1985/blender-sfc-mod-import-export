@@ -1,10 +1,10 @@
 bl_info = {
-    'name': 'Starfleet Command OP MOD Import',
+    'name': 'Starfleet Command 1/2/OP/3 MOD Import',
     'author': 'SFC MOD project',
-    'version': (0, 2, 3),
+    'version': (0, 2, 4),
     'blender': (4, 3, 0),
     'location': 'File > Import',
-    'description': 'Import observed Orion Pirates MOD models',
+    'description': 'Import Starfleet Command MOD models (experimental)',
     'category': 'Import-Export',
 }
 
@@ -138,7 +138,7 @@ def import_model(context, filepath):
 
 class IMPORT_OT_sfc_mod(bpy.types.Operator, ImportHelper):
     bl_idname = 'import_scene.sfc_mod'
-    bl_label = 'Import SFC OP MOD'
+    bl_label = 'Import SFC 1/2/OP/3 MOD'
     filename_ext = '.mod'
     filter_glob: StringProperty(default='*.mod;*.MOD', options={'HIDDEN'})
 
@@ -154,7 +154,7 @@ class IMPORT_OT_sfc_mod(bpy.types.Operator, ImportHelper):
 
 
 def menu_import(self, context):
-    self.layout.operator(IMPORT_OT_sfc_mod.bl_idname, text='Starfleet Command OP (.mod)')
+    self.layout.operator(IMPORT_OT_sfc_mod.bl_idname, text='Starfleet Command 1/2/OP/3 (.mod)')
 
 
 def register():

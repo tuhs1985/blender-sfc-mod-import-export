@@ -8,6 +8,7 @@ import bpy
 repo = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(repo / 'addon'))
 import io_scene_sfc_mod as addon
+assert addon.bl_info['name'] == 'Starfleet Command 1/2/OP/3 MOD Import'
 
 def chunk(tag, data):
     return tag + struct.pack('<I', len(data)) + data + b'\0' * (-len(data) % 4)
