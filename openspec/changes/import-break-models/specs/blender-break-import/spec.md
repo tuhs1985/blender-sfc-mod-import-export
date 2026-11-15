@@ -7,11 +7,11 @@ Enable artists to inspect and edit OP destruction-model pieces in Blender.
 ## ADDED Requirements
 
 ### Requirement: Separate break pieces
-The importer SHALL create a separate mesh for each supported piece identifier while retaining polygon order, material assignments and stored UVs. In an empty namespace, piece IDs 0, 1, and 2 SHALL be named `brk_00`, `brk_01`, and `brk_02` respectively, retaining the original zero-based ID as metadata.
+The importer SHALL create a separate mesh for each supported piece identifier while retaining polygon order, material assignments and stored UVs. For a file named `<shipname>_brk.mod`, piece IDs 0, 1, and 2 SHALL be named `<shipname>_brk_1`, `<shipname>_brk_2`, and `<shipname>_brk_3` in an empty namespace, retaining the original zero-based ID as metadata.
 
 #### Scenario: Seven-piece model
 - **WHEN** a break model contains seven valid piece identifiers
-- **THEN** Blender receives seven distinct piece objects named `brk_00` through `brk_06` with all polygons represented
+- **THEN** Blender receives seven distinct piece objects named `<shipname>_brk_1` through `<shipname>_brk_7` with all polygons represented
 
 ### Requirement: Handle pivot records
 The importer SHALL position a piece origin at a matching numbered pivot when unambiguous, and SHALL NOT warn when pivot records are absent.
