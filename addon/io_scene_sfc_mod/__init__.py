@@ -1,7 +1,7 @@
 bl_info = {
     'name': 'Starfleet Command OP MOD Import',
     'author': 'SFC MOD project',
-    'version': (0, 2, 1),
+    'version': (0, 2, 2),
     'blender': (4, 3, 0),
     'location': 'File > Import',
     'description': 'Import observed Orion Pirates MOD models',
@@ -85,7 +85,8 @@ def import_model(context, filepath):
         else:
             parts = [(number, source, None) for number, source in enumerate(model['meshes'], 1)]
         for number, source, pivot in parts:
-            mesh = bpy.data.meshes.new(f'{path.stem} {"piece" if is_break else "LOD"} {number}')
+            name = f'brk_{number - 1:02d}' if is_break else f'{path.stem} LOD {number}'
+            mesh = bpy.data.meshes.new(name)
             mesh['mod_polygon_records'] = json.dumps([
                 (p['raw_header'] + b''.join(c['raw'] for c in p['corners'])).hex()
                 for p in source['polygons']

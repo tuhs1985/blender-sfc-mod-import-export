@@ -43,6 +43,7 @@ with tempfile.TemporaryDirectory() as folder:
     warnings = addon.import_model(bpy.context, str(break_path))
     pieces = [o for o in set(bpy.data.objects) - before if o.type == 'MESH']
     assert len(pieces) == 1 and pieces[0]['mod_piece_id'] == 0
+    assert pieces[0].name == 'brk_00'
     assert 'mod_pivot_name' not in pieces[0]
     assert not any('pivot' in warning for warning in warnings)
     print('PASS break piece without pivot')
