@@ -15,6 +15,9 @@ context: |
   Represent hardpoints and damage points as editable Blender empties, preserving
   the verified MOD data needed for export; do not assume Max dummy objects and
   Blender empties are structurally equivalent.
+  The user confirmed that rotating the FCA preview +90 degrees about Blender's
+  X axis gives the desired visual orientation. Apply the same transform to FCA
+  geometry and markers; verify broader models and export round trips.
 
 # Project context (optional)
 # Add only constraints that should guide OpenSpec artifacts and workflows.
