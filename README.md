@@ -1,6 +1,16 @@
 # Blender SFC MOD Import/Export
 
-This project aims to create a Blender add-on for importing and exporting Starfleet Command `.mod` models. It is at the research stage: there is no working importer or exporter yet.
+This project aims to create a Blender add-on for importing and exporting Starfleet Command `.mod` models. It is at the research stage: there is no working Blender importer or exporter yet.
+
+## Inspect a MOD container
+
+With Python installed, run:
+
+```powershell
+python tools/inspect_mod.py 'C:\path\to\model.mod'
+```
+
+The read-only tool reports top-level chunk tags, offsets, and payload sizes in the observed SFC2-style layout. It checks structural boundaries, not geometry or game compatibility. Run its synthetic tests with `python -m unittest discover -s tests -v`.
 
 ## Reference material
 

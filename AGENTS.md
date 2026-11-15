@@ -4,4 +4,6 @@ Use OpenSpec for substantive changes: maintain proposals, specifications, design
 
 Use the available Codex Superpowers skills when applicable, alongside OpenSpec. Follow the relevant skill for the current work and keep OpenSpec artifacts aligned with decisions and implementation.
 
+Maintain project notes in the Obsidian vault folder `02 - Projects/Coding Projects/Blender SFC MOD Import Export`, using the available Obsidian skills and CLI. The repository remains the source of truth for code, OpenSpec artifacts, and technical evidence.
+
 The existing format research is in `docs/reverse-engineering.md` and `docs/remix-reference.md`. Treat unverified interpretations as hypotheses and keep game-derived fixtures and third-party binaries out of Git unless redistribution is authorized.

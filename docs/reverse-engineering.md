@@ -26,5 +26,8 @@ The script exports every function Ghidra identifies, including a comment with it
 - The chunk helper at `10001e10` writes a four-byte tag and a placeholder length. The helper at `10001e70` replaces that length with the payload size and pads the file to a four-byte boundary. Ghidra's inferred parameter type for the tag is unreliable; inspect the assembly when interpreting it.
 - A local `Planet_test.mod` begins with ASCII `MDLS`, followed by bytes `e0 86 11 00`, and contains `STRS` at offset 44. This is one example, not yet a general format specification.
 - The exporter writes `0x200` in the main header; its meaning and version compatibility need verification against more files and the importer.
+- A read-only examination of 12 local models found a 36-byte opaque header after the outer eight-byte `MDLS` header, with top-level chunks beginning at offset 44. Their little-endian chunk payload lengths and four-byte alignment agree with the exporter helpers. The local `Refit_Constitution_brk.MOD` has `STRS`, `MATS`, and `MOD0`; `Planet_test.mod` also has `PNTS`. These are observations, not universal requirements or semantic validation.
+
+Use `python tools/inspect_mod.py 'C:\path\to\model.mod'` to inspect this observed layout. The tool does not alter the file or decode geometry.
 
 Next, identify and label the read/write routines and chunk structures, compare them with multiple known MOD files, and build tests from authorized fixtures. Do not assume the R3/R4 SFC2 tools support every SFC version.
