@@ -12,6 +12,8 @@ python tools/inspect_mod.py 'C:\path\to\model.mod'
 
 The read-only tool reports top-level chunk tags, offsets, and payload sizes in the observed SFC2-style layout. It checks structural boundaries, not geometry or game compatibility. Run its synthetic tests with `python -m unittest discover -s tests -v`.
 
+Add `--geometry` to decode observed `MOD0` records and report vertex, polygon, and material-index counts for every LOD. The Python parser also exposes stored corner indices and UVs. It does not establish coordinate orientation, winding, normal interpretation, or game compatibility.
+
 ## Reference material
 
 The supplied 3ds Max R3 and R4 plugin packages contain compiled plugins and readme files, not source code. Their readmes describe the Starfleet Command Volume II workflow; compatibility with other SFC releases remains to be established. The original files remain in the supplied reference directories and are not included in this repository.

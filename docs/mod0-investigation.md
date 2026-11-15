@@ -40,7 +40,15 @@ The user supplied the FCA folder from an Orion Pirates installation. `fca.mod` (
 | 2 | 46176 | 205 | 376 |
 | 3 | 90772 | 86 | 140 |
 
-Each chunk contains a `VTXS` payload of 12 bytes per recorded vertex and the corresponding number of 104-byte `POLY` payloads. The first two `VTXS` payloads are byte-identical, but their `POLY` data differs; the meaning of those differences is not yet established. The `PNTS` payload is 464 bytes, consistent with 29 16-byte records; its string table contains hardpoint and damage-point names.
+Each chunk contains a `VTXS` payload of 12 bytes per recorded vertex and the corresponding number of 104-byte `POLY` payloads. The first two `VTXS` payloads are byte-identical. Comparing all 376 corresponding `POLY` payloads shows that only bytes 4–7 differ: each first-LOD material index is six lower than the corresponding second-LOD index. FCA's material records at those indices point to `fca_1_*` and `fca_2_*` texture stems respectively. Thus these two LODs retain the same stored vertex and polygon-corner data while using different material indices. This is an observation for this file, not a general LOD rule.
+
+The `PNTS` payload is 464 bytes, consistent with 29 16-byte records; its string table contains hardpoint and damage-point names. For the first five records, interpreting each as three little-endian floats followed by a 32-bit string-table byte offset produces finite positions and the expected hardpoint names. The R4 importer loads the first three words as a translation and uses the fourth as a string offset. The transform from game coordinates to Blender coordinates remains to be established. Blender empties are the planned editable representation; preserve verified source data needed for export rather than assuming 3ds Max dummy objects and empties are equivalent.
+
+## Polygon record evidence
+
+The R4 importer at `100014c0` reads each `POLY` payload as two 32-bit values, 12 additional bytes, then a number of 28-byte corner records given by the first value. The FCA file has three corners for every polygon in all three LODs. Its 104-byte payloads therefore fit a 20-byte header plus three 28-byte records. The importer uses the second header word as the material index. Its mesh construction reads a 16-bit vertex index at the beginning of each corner record and two float values at offsets 16 and 20 of that record as texture coordinates; observed FCA indices are within their LOD's vertex count. The remaining bytes include normal-like values, but their exact semantics, the upper half of the index word, winding and coordinate transformation need further verification. Avoid hard-coding those interpretations without additional evidence.
+
+The R4 material reader at `10001410` reads a 28-byte base record and an extra eight bytes when flag `0x20` is set. In FCA, the 32-bit values at material-record offsets 24 and 32 resolve to diffuse and illumination texture stems in `STRS` for textured records. Mapping is based on the observed sample and importer code; other flags and record fields remain unverified.
 
 `fca_brk.mod` (SHA-256 `0f4c91452039c628daefd339585689f46ec5c152e55368776d8f476260bb6a4c`) has one `MOD0` with 351 vertex records and 661 polygons. Its `PNTS` payload is 112 bytes, consistent with seven 16-byte records, and `STRS` contains seven names from `fca_brk_1pivot` through `fca_brk_7pivot`. The association between those records, pivot names and geometry sections still needs decoding. These files provide an OP multi-LOD reference, not proof of behavior for every OP model.
 
@@ -48,4 +56,4 @@ The captured F-CA Blender fixture also has 6,370 triangles, but matching counts 
 
 ## Next investigation
 
-Trace how the importer uses `POLY` fields and verify vertex indices, corner normals, UVs, material indices and winding against known file data and the runtime fixture. Inspect the FCA LOD distances, materials, points and break pivots independently. Build synthetic tests for each proven field before exposing it as an importer feature; do not apply the Remix adapter's UV conversion to MOD data without direct evidence.
+Verify corner normals, winding and coordinate conversion against known file data and controlled Blender/game comparisons. Decode the FCA LOD distances, remaining material flags and break-pivot associations. Build synthetic tests for each proven field before exposing it as an importer feature; do not apply the Remix adapter's UV conversion to MOD data without direct evidence.

@@ -12,6 +12,9 @@ context: |
   fixtures and original third-party binaries stay local and out of Git unless
   redistribution is authorized. Do not apply the Remix adapter's UV correction
   to MOD data without direct evidence.
+  Represent hardpoints and damage points as editable Blender empties, preserving
+  the verified MOD data needed for export; do not assume Max dummy objects and
+  Blender empties are structurally equivalent.
 
 # Project context (optional)
 # Add only constraints that should guide OpenSpec artifacts and workflows.
