@@ -30,6 +30,8 @@ Each `MOD0` contains one `VTXS` chunk of 12 bytes per reported vertex and the re
 
 Both files have one top-level `MOD0` chunk, and the header's 32-bit value at offset 16 is `1` in both. Header float values at offsets 28 and 32 are `180.0` and `350.0`; their meanings have not been established. These numbers alone do not prove additional LOD geometry exists.
 
+Correction: the files above are from the Remix project's `Game Assets` copy. The installed OP `Assets/Models/kca/kca_brk.mod` is a different file (SHA-256 `5ea3a20d5185f4768865edb446ba26ae49788e57dd93a2dcfc57313fc9da8a26`) and **does contain five `PNTS` records**, named `kca_1_1pivot` through `kca_1_5pivot`, in a different order in the file. The user observed these actual empties in Blender. The original claim that KCA break files lack points applies only to the inspected Remix copy, not KCA generally. The importer matches pivot numbers by name rather than file order; game semantics remain unverified.
+
 ## Installed Orion Pirates FCA reference
 
 The user supplied the FCA folder from an Orion Pirates installation. `fca.mod` (SHA-256 `a424c2a4d591c9fe3f1c2e4f0a5b3a084532e5c9fd94b548c04bc3a8995a6781`) contains `STRS`, `PNTS`, `MATS`, and **three** consecutive top-level `MOD0` chunks. The 32-bit header value at offset 16 is `3`, matching the observed geometry chunk count. The folder and string table include `fca_1_*`, `fca_2_*`, and `fca_3_*` texture stems and corresponding illumination variants.

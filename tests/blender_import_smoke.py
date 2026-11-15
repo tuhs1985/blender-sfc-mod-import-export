@@ -46,14 +46,14 @@ with tempfile.TemporaryDirectory() as folder:
     assert 'mod_pivot_name' not in pieces[0]
     assert not any('pivot' in warning for warning in warnings)
     print('PASS break piece without pivot')
-    pivot_strings = b'ship_brk_1pivot\0hull\0hulli\0'
-    pivot_material = struct.pack('<9I', 0x21, 0, 0, 0, 0, 0, 16, 0, 21)
+    pivot_strings = b'ship_1_1pivot\0hull\0hulli\0'
+    pivot_material = struct.pack('<9I', 0x21, 0, 0, 0, 0, 0, 14, 0, 19)
     pivot_body = bytes(36) + chunk(b'STRS', pivot_strings) + chunk(b'PNTS', points) + chunk(b'MATS', pivot_material) + chunk(b'MOD0', geometry)
     break_path.write_bytes(b'MDLS' + struct.pack('<I', len(pivot_body)) + pivot_body)
     before = set(bpy.data.objects)
     warnings = addon.import_model(bpy.context, str(break_path))
     piece = next(o for o in set(bpy.data.objects) - before if o.type == 'MESH')
-    assert piece['mod_pivot_name'] == 'ship_brk_1pivot'
+    assert piece['mod_pivot_name'] == 'ship_1_1pivot'
     assert tuple(piece.location) == (1.0, -3.0, 2.0)
     assert not any('pivot' in warning for warning in warnings)
     print('PASS numbered break pivot')

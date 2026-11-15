@@ -1,7 +1,7 @@
 bl_info = {
     'name': 'Starfleet Command OP MOD Import',
     'author': 'SFC MOD project',
-    'version': (0, 2, 0),
+    'version': (0, 2, 1),
     'blender': (4, 3, 0),
     'location': 'File > Import',
     'description': 'Import observed Orion Pirates MOD models',
@@ -29,7 +29,7 @@ def import_model(context, filepath):
     pivots = {}
     if is_break:
         for point in model['points']:
-            match = re.fullmatch(re.escape(path.stem) + r'_(\d+)pivot', point['name'], re.IGNORECASE)
+            match = re.search(r'_(\d+)pivot$', point['name'], re.IGNORECASE)
             if match:
                 key = int(match.group(1)) - 1
                 if key in pivots:
