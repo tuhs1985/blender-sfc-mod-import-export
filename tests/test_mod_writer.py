@@ -14,6 +14,11 @@ def chunk(tag, body):
 
 
 class WriterTests(unittest.TestCase):
+    def test_detects_distinct_images_that_share_local_stem(self):
+        conflicts = fmt.texture_stem_collisions([r'C:\one\Hull.png', r'C:\two\hull.bmp', r'C:\ONE\HULL.PNG', r'C:\two\other.png'])
+        self.assertEqual(set(conflicts), {'hull'})
+        self.assertEqual(len(conflicts['hull']), 2)
+
     def geometry(self):
         vertices = struct.pack('<9f', 0, 0, 0, 1, 0, 0, 0, 1, 0)
         corners = b''.join(struct.pack('<I3f2fI', i, 0, 0, 1, i / 2, 0, 0) for i in range(3))
@@ -60,6 +65,15 @@ class WriterTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             fmt.rewrite_geometry(data, [])
 
+    def test_rejects_vertex_edits_until_normal_handling_is_verified(self):
+        geometry = self.geometry()
+        body = bytes(36) + chunk(b'MOD0', geometry)
+        data = b'MDLS' + struct.pack('<I', len(body)) + body
+        mesh = fmt.inspect_geometry(geometry)
+        mesh['vertices'][0] = (2., 0., 0.)
+        with self.assertRaises(ValueError):
+            fmt.rewrite_geometry(data, [mesh])
+
     def test_rejects_unserializable_nested_chunks(self):
         mesh = fmt.inspect_geometry(self.geometry())
         mesh['unknown'] = [(b'ZZZZ', 2)]
@@ -76,12 +90,12 @@ class WriterTests(unittest.TestCase):
         data = b'MDLS' + struct.pack('<I', len(body)) + body
         model = fmt.parse_model(data)
         model['points'][0]['position'] = (4., 5., 6.)
-        model['materials'][0]['diffuse'] = 'hull.png'
+        model['materials'][0]['diffuse'] = r'C:\outside\thisdamntexture.png'
         model['meshes'][0]['polygons'][0]['material'] = 0
         out = fmt.rewrite_records(data, model['points'], model['materials'], model['meshes'])
         parsed = fmt.parse_model(out)
         self.assertEqual(parsed['points'][0]['position'], (4., 5., 6.))
-        self.assertEqual(parsed['materials'][0]['diffuse'], 'hull.png')
+        self.assertEqual(parsed['materials'][0]['diffuse'], 'thisdamntexture')
         self.assertEqual(parsed['materials'][0]['illumination'], 'hulli')
         model['meshes'][0]['polygons'][0]['material'] = 1
         with self.assertRaises(ValueError):

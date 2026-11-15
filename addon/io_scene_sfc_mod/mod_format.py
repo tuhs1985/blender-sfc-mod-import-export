@@ -3,6 +3,7 @@
 import argparse
 from collections import Counter
 import math
+import ntpath
 import struct
 import sys
 from pathlib import Path
@@ -79,6 +80,18 @@ def inspect_geometry(data):
     return {'vertices': vertices, 'polygons': polygons, 'unknown': unknown}
 
 
+def texture_stem_collisions(paths):
+    """Identify distinct resolved image paths mapping to the same local stem."""
+    groups = {}
+    for path in paths:
+        normalized = ntpath.normcase(ntpath.normpath(path))
+        stem = ntpath.splitext(ntpath.basename(path))[0].casefold()
+        if not stem:
+            raise ValueError('Image path has no filename stem')
+        groups.setdefault(stem, {}).setdefault(normalized, path)
+    return {stem: list(values.values()) for stem, values in groups.items() if len(values) > 1}
+
+
 def write_chunk(tag, payload):
     """Serialize one observed chunk with four-byte alignment."""
     if not isinstance(tag, bytes) or len(tag) != 4:
@@ -149,7 +162,11 @@ def rewrite_geometry(data, meshes):
         end = offset + 8 + size
         aligned_end = (end + 3) & ~3
         if tag == b'MOD0':
-            payload = write_geometry(next(mesh_iter))
+            mesh = next(mesh_iter)
+            original_mesh = inspect_geometry(data[offset + 8:end])
+            if mesh['vertices'] != original_mesh['vertices']:
+                raise ValueError('Vertex edits are not supported until normal handling is verified')
+            payload = write_geometry(mesh)
             if len(payload) != size:
                 raise ValueError('Geometry size changed; unsupported topology edit')
             body.extend(tag + struct.pack('<I', len(payload)) + payload)
@@ -255,6 +272,10 @@ def rewrite_records(data, points, materials, meshes):
                     raise ValueError(f'Adding a {field} map is not supported yet')
             else:
                 old_offset = struct.unpack_from('<I', raw, field_offset)[0]
+                if current != previous:
+                    if not isinstance(current, str) or '\0' in current:
+                        raise ValueError('Invalid texture reference')
+                    current = ntpath.splitext(ntpath.basename(current))[0]
                 new_offset = assign_name(current, previous, old_offset)
                 struct.pack_into('<I', raw, field_offset, new_offset)
         material_data.extend(raw)
