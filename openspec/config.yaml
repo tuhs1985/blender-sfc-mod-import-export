@@ -1,0 +1,43 @@
+schema: spec-driven
+
+context: |
+  Build a Blender add-on to import and export Starfleet Command MOD models.
+  The supplied 3ds Max plugins document SFC2 behavior; support for other game
+  versions must be established with evidence. The binary format is under
+  investigation. Distinguish verified format behavior from hypotheses and
+  runtime-capture observations. See docs/reverse-engineering.md and
+  docs/remix-reference.md for evidence and fixture provenance. Game-derived
+  fixtures and original third-party binaries stay local and out of Git unless
+  redistribution is authorized. Do not apply the Remix adapter's UV correction
+  to MOD data without direct evidence.
+
+# Project context (optional)
+# Add only constraints that should guide OpenSpec artifacts and workflows.
+# Include constraints an agent cannot infer by reading the code.
+# Keep general project documentation and discoverable codebase facts out.
+# Example:
+#   context: |
+#     Designs and tasks must cover Windows, macOS, and Linux
+#     Write all artifacts in Spanish
+
+# Per-artifact rules (optional)
+# Add custom rules for specific artifacts.
+# Example:
+#   rules:
+#     proposal:
+#       - Keep proposals under 500 words
+#       - Always state what is out of scope
+#     tasks:
+#       - Break tasks into chunks of max 2 hours
+
+# Per-operation guidance (optional)
+# Add advisory guidance for how apply and archive work should be conducted.
+# This is separate from artifact rules above.
+# Example:
+#   operations:
+#     apply:
+#       guidance:
+#         - Keep test summaries concise
+#     archive:
+#       guidance:
+#         - Summarize the archive outcome before finishing
