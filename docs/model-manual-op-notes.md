@@ -18,4 +18,4 @@ Dynamic LOD, progressive damage maps, the SFC3 primary/heavy hardpoint-number sp
 
 ## Research priorities
 
-Find a confirmed multi-LOD OP model and inspect all `MOD0` chunks and header distances; compare its point records, materials, illumination maps and break model against the plugin's read and write paths. Test resulting behavior against OP before claiming compatibility.
+The installed FCA model provides a three-`MOD0` OP reference; see `mod0-investigation.md`. Inspect its header distances, point records, materials, illumination maps and break model against the plugin's read and write paths. Test resulting behavior against OP before claiming compatibility.

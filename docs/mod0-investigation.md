@@ -28,10 +28,24 @@ The supplied older reference folder contains `kca.mod`, `kca_brk.mod`, and five 
 
 Each `MOD0` contains one `VTXS` chunk of 12 bytes per reported vertex and the reported number of 104-byte `POLY` chunks. The normal file's `PNTS` payload is 528 bytes, consistent with 33 16-byte records; its string table includes hardpoint and damage-point names. The normal and break string tables include texture stems with corresponding `i` variants, and the folder contains matching BMP pairs. No interpretation of point-record fields or material mappings has yet been verified.
 
-Both files have one top-level `MOD0` chunk, and the header's 32-bit value at offset 16 is `1` in both. Header float values at offsets 28 and 32 are `180.0` and `350.0`; their meanings have not been established. These numbers alone do not prove additional LOD geometry exists. A model known to contain multiple LODs is still needed to verify how those are represented.
+Both files have one top-level `MOD0` chunk, and the header's 32-bit value at offset 16 is `1` in both. Header float values at offsets 28 and 32 are `180.0` and `350.0`; their meanings have not been established. These numbers alone do not prove additional LOD geometry exists.
+
+## Installed Orion Pirates FCA reference
+
+The user supplied the FCA folder from an Orion Pirates installation. `fca.mod` (SHA-256 `a424c2a4d591c9fe3f1c2e4f0a5b3a084532e5c9fd94b548c04bc3a8995a6781`) contains `STRS`, `PNTS`, `MATS`, and **three** consecutive top-level `MOD0` chunks. The 32-bit header value at offset 16 is `3`, matching the observed geometry chunk count. The folder and string table include `fca_1_*`, `fca_2_*`, and `fca_3_*` texture stems and corresponding illumination variants.
+
+| MOD0 | Offset | Vertex records | Polygon chunks |
+| --- | ---: | ---: | ---: |
+| 1 | 1580 | 205 | 376 |
+| 2 | 46176 | 205 | 376 |
+| 3 | 90772 | 86 | 140 |
+
+Each chunk contains a `VTXS` payload of 12 bytes per recorded vertex and the corresponding number of 104-byte `POLY` payloads. The first two `VTXS` payloads are byte-identical, but their `POLY` data differs; the meaning of those differences is not yet established. The `PNTS` payload is 464 bytes, consistent with 29 16-byte records; its string table contains hardpoint and damage-point names.
+
+`fca_brk.mod` (SHA-256 `0f4c91452039c628daefd339585689f46ec5c152e55368776d8f476260bb6a4c`) has one `MOD0` with 351 vertex records and 661 polygons. Its `PNTS` payload is 112 bytes, consistent with seven 16-byte records, and `STRS` contains seven names from `fca_brk_1pivot` through `fca_brk_7pivot`. The association between those records, pivot names and geometry sections still needs decoding. These files provide an OP multi-LOD reference, not proof of behavior for every OP model.
 
 The captured F-CA Blender fixture also has 6,370 triangles, but matching counts do not prove identical input geometry or ordering. The break runtime capture reports 3,497 shared positions, distinct from the 6,766 records observed in this particular local break file; these must not be assumed to be equivalent assets or representations.
 
 ## Next investigation
 
-Trace how the importer uses `POLY` fields and verify vertex indices, corner normals, UVs, material indices and winding against known file data and the runtime fixture. Inspect materials and strings independently. Build synthetic tests for each proven field before exposing it as an importer feature; do not apply the Remix adapter's UV conversion to MOD data without direct evidence.
+Trace how the importer uses `POLY` fields and verify vertex indices, corner normals, UVs, material indices and winding against known file data and the runtime fixture. Inspect the FCA LOD distances, materials, points and break pivots independently. Build synthetic tests for each proven field before exposing it as an importer feature; do not apply the Remix adapter's UV conversion to MOD data without direct evidence.
