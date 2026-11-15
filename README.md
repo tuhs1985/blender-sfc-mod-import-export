@@ -32,6 +32,10 @@ The planned exporter follows the same user-directed texture policy: it must not 
 
 For the installed OP reference, select `C:\Program Files (x86)\Taldren Software Inc\Starfleet Command Orion Pirates\Assets\Models\fca\fca.mod` in the import dialog.
 
+## Exporter development
+
+An experimental binary-writing foundation is under development; it is not yet available as a Blender export operator. It preserves source bytes for unknown fields, and has passed byte-identical unchanged binary round trips against two local FCA files. Synthetic checks also cover selected UV, material-index, point and texture-reference edits. Editing meshes in Blender, complete material editing, break export, and in-game compatibility remain unverified. Imported models now retain compressed source data in their Blender collection to support future lossless exports; models imported by earlier add-on versions do not have this metadata.
+
 ## Reference material
 
 The supplied 3ds Max R3 and R4 plugin packages contain compiled plugins and readme files, not source code. Their readmes describe the Starfleet Command Volume II workflow; compatibility with other SFC releases remains to be established. The original files remain in the supplied reference directories and are not included in this repository.

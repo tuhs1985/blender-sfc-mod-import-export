@@ -9,8 +9,10 @@ bl_info = {
 }
 
 import math
+import base64
 import json
 import re
+import zlib
 from pathlib import Path
 import bpy
 from mathutils import Vector
@@ -22,7 +24,8 @@ from .mod_format import parse_model, group_break_polygons
 def import_model(context, filepath):
     path = Path(filepath)
     is_break = path.stem.casefold().endswith('_brk')
-    model = parse_model(path.read_bytes())
+    source_bytes = path.read_bytes()
+    model = parse_model(source_bytes)
     if is_break and len(model['meshes']) != 1:
         raise ValueError('Break model must contain one geometry chunk')
     groups = group_break_polygons(model['meshes'][0]) if is_break else None
@@ -39,6 +42,8 @@ def import_model(context, filepath):
     warnings = []
     collection = bpy.data.collections.new(f'SFC MOD: {path.stem}')
     context.scene.collection.children.link(collection)
+    collection['mod_source_zlib_base64'] = base64.b64encode(zlib.compress(source_bytes)).decode('ascii')
+    collection['mod_source_filename'] = path.name
     materials = []
     def texture(reference):
         filename = reference.replace('\\', '/').rsplit('/', 1)[-1]

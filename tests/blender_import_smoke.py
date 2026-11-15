@@ -1,5 +1,7 @@
 """Run with Blender's --background --factory-startup --python option."""
 import struct
+import base64
+import zlib
 import sys
 import tempfile
 from pathlib import Path
@@ -22,10 +24,13 @@ geometry = struct.pack('<II', 3, 1) + chunk(b'VTXS', vertices) + chunk(b'POLY', 
 body = bytes(36) + chunk(b'STRS', strings) + chunk(b'PNTS', points) + chunk(b'MATS', material) + chunk(b'MOD0', geometry)
 with tempfile.TemporaryDirectory() as folder:
     path = Path(folder) / 'ship.mod'
-    path.write_bytes(b'MDLS' + struct.pack('<I', len(body)) + body)
+    original = b'MDLS' + struct.pack('<I', len(body)) + body
+    path.write_bytes(original)
     before = set(bpy.data.objects)
     warnings = addon.import_model(bpy.context, str(path))
     created = set(bpy.data.objects) - before
+    imported_collection = next(c for c in bpy.data.collections if c.name == 'SFC MOD: ship')
+    assert zlib.decompress(base64.b64decode(imported_collection['mod_source_zlib_base64'])) == original
     assert len(warnings) == 2
     assert sorted(o.type for o in created) == ['EMPTY', 'MESH']
     assert next(o for o in created if o.type == 'EMPTY')['mod_name'] == 'hardpoint1'
@@ -77,3 +82,9 @@ with tempfile.TemporaryDirectory() as folder:
     assert tuple(piece.location) == (1.0, -3.0, 2.0)
     assert not any('pivot' in warning for warning in warnings)
     print('PASS numbered break pivot')
+    blend_file = str(Path(folder) / 'metadata.blend')
+    bpy.ops.wm.save_as_mainfile(filepath=blend_file)
+    bpy.ops.wm.open_mainfile(filepath=blend_file)
+    saved = bpy.data.collections['SFC MOD: ship']['mod_source_zlib_base64']
+    assert zlib.decompress(base64.b64decode(saved)) == original
+    print('PASS source metadata survives Blender save and reload')
