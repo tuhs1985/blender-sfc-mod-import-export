@@ -30,6 +30,24 @@ with tempfile.TemporaryDirectory() as folder:
     assert sorted(o.type for o in created) == ['EMPTY', 'MESH']
     assert next(o for o in created if o.type == 'EMPTY')['mod_name'] == 'hardpoint1'
     assert len(next(o for o in created if o.type == 'MESH').data.materials) == 1
+    image = bpy.data.images.new('test_texture', width=1, height=1)
+    image.filepath_raw = str(Path(folder) / 'hull.png')
+    image.file_format = 'PNG'
+    image.save()
+    before = set(bpy.data.objects)
+    warnings = addon.import_model(bpy.context, str(path))
+    imported = next(o for o in set(bpy.data.objects) - before if o.type == 'MESH')
+    nodes = imported.data.materials[0].node_tree.nodes
+    assert any(n.type == 'TEX_IMAGE' and n.image and n.image.filepath.endswith('hull.png') for n in nodes)
+    assert len(warnings) == 1
+    image.filepath_raw = str(Path(folder) / 'hull.bmp')
+    image.file_format = 'BMP'
+    image.save()
+    before = set(bpy.data.objects)
+    warnings = addon.import_model(bpy.context, str(path))
+    imported = next(o for o in set(bpy.data.objects) - before if o.type == 'MESH')
+    assert any('Ambiguous texture: hull' in warning for warning in warnings)
+    assert not any(n.type == 'TEX_IMAGE' for n in imported.data.materials[0].node_tree.nodes)
     path.write_bytes(b'broken')
     before = set(bpy.data.objects)
     try:

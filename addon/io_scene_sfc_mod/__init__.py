@@ -1,7 +1,7 @@
 bl_info = {
     'name': 'Starfleet Command 1/2/OP/3 MOD Import',
     'author': 'SFC MOD project',
-    'version': (0, 2, 4),
+    'version': (0, 2, 5),
     'blender': (4, 3, 0),
     'location': 'File > Import',
     'description': 'Import Starfleet Command MOD models (experimental)',
@@ -35,17 +35,23 @@ def import_model(context, filepath):
                 if key in pivots:
                     raise ValueError('Duplicate numbered break pivot')
                 pivots[key] = point
-    available = {p.name.casefold(): p for p in path.parent.iterdir() if p.is_file()}
+    available = [p for p in path.parent.iterdir() if p.is_file()]
     warnings = []
     collection = bpy.data.collections.new(f'SFC MOD: {path.stem}')
     context.scene.collection.children.link(collection)
     materials = []
-    def texture(stem):
-        file = available.get((stem + '.bmp').casefold())
-        if file is None:
-            warnings.append(f'Missing texture: {stem}.bmp')
+    def texture(reference):
+        filename = reference.replace('\\', '/').rsplit('/', 1)[-1]
+        exact = [p for p in available if p.name.casefold() == filename.casefold()]
+        candidates = exact if exact else [p for p in available if p.stem.casefold() == filename.casefold() and p.suffix.casefold() in bpy.path.extensions_image]
+        if len(candidates) != 1:
+            warnings.append(f'{"Ambiguous" if candidates else "Missing"} texture: {reference}')
             return None
-        return bpy.data.images.load(str(file), check_existing=True)
+        try:
+            return bpy.data.images.load(str(candidates[0]), check_existing=True)
+        except (RuntimeError, OSError) as exc:
+            warnings.append(f'Could not load texture {reference}: {exc}')
+            return None
     try:
         for index, source in enumerate(model['materials']):
             mat = bpy.data.materials.new(f'{path.stem} Material {index:02d}')

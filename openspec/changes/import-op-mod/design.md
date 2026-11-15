@@ -14,7 +14,7 @@ FCA previews used the existing Python parser, three LOD meshes, the user's verif
 
 Separate binary parsing from Blender scene creation. Reuse the existing container and geometry parsing in a distributable add-on package; do not depend on paths outside the add-on. Parse and validate all records before scene creation. Support triangle faces initially and reject other polygon sizes explicitly, rather than silently changing triangulation. Keep stored UV values and apply FCA winding and object rotation consistently to meshes and point positions. Preserve raw point positions and material flags for future export.
 
-Resolve textures case-insensitively alongside the MOD; missing references produce warnings and retain names. Preserve material slot order including unused slots. Use separate image nodes, with an approximate diffuse-times-mask emission preview, not a claim of OP rendering parity. Build objects in a dedicated collection and clean it up if scene construction fails.
+Resolve explicit filenames case-insensitively alongside the MOD, or an extensionless reference to a unique Blender-supported image with the same stem. Missing, ambiguous and unreadable images produce warnings and retain names; they do not prevent geometry import. Do not impose OP texture-format restrictions on Blender assignments. Preserve material slot order including unused slots. Use separate image nodes, with an approximate diffuse-times-mask emission preview, not a claim of OP rendering parity. Build objects in a dedicated collection and clean it up if scene construction fails.
 
 ## Risks / Trade-offs
 

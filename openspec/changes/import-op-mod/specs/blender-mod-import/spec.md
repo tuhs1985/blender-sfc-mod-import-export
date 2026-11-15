@@ -28,11 +28,19 @@ The importer SHALL preserve material table order and assign polygon material ind
 - **THEN** those polygons retain the corresponding material assignments
 
 ### Requirement: Connect texture maps
-The importer SHALL use available diffuse and illumination images as separate nodes in the same material and allow missing images without inventing replacements.
+The importer SHALL use available diffuse and illumination images as separate nodes in the same material without restricting them to BMP. It SHALL preserve references and allow unresolved, ambiguous, or unreadable images without rejecting the model.
 
 #### Scenario: Missing illumination image
 - **WHEN** a referenced illumination map is absent
 - **THEN** the model still imports and the user receives a warning
+
+#### Scenario: Alternate image format
+- **WHEN** a texture stem uniquely matches a Blender-supported PNG image
+- **THEN** the importer loads that image without requiring a BMP
+
+#### Scenario: Ambiguous image stem
+- **WHEN** a texture stem matches more than one supported image
+- **THEN** the importer retains the reference and reports the ambiguity without selecting one arbitrarily
 
 ### Requirement: Reject malformed input
 The importer SHALL report invalid structure without leaving partially created scene objects.

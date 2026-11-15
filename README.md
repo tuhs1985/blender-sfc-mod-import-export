@@ -26,6 +26,8 @@ Install the archive through Blender's add-on preferences, enable **Starfleet Com
 
 Break pieces follow the manual's Max authoring convention: for `kca_brk.mod`, the objects are named `kca_brk_1`, `kca_brk_2`, etc. These names are generated for Blender; the MOD contains zero-based numeric piece IDs, which are retained as `mod_piece_id` custom properties (so `kca_brk_1` has ID 0). Original named pivot records remain separate empties. Blender adds a suffix when an object name already exists in the same file; exporters must account for that rather than relying on names alone.
 
+Texture references are retained regardless of image format. The importer loads an exact filename or, for an extensionless name, a unique matching image in a format Blender recognizes. Missing, ambiguous, or unreadable images do not prevent model import; assign or replace them in Blender as desired. This is not a claim that OP supports every Blender image format.
+
 For the installed OP reference, select `C:\Program Files (x86)\Taldren Software Inc\Starfleet Command Orion Pirates\Assets\Models\fca\fca.mod` in the import dialog.
 
 ## Reference material
