@@ -74,6 +74,8 @@ In this break model, the upper 16 bits of each corner's first word form seven co
 
 The local `output/fca-break-preview.blend` uses that provisional association to create seven separate objects with their origins at those pivot positions. Blender readback confirms seven meshes and 661 polygons. This untextured experimental preview needs a visual and game-behavior check; do not treat its pivot mapping as verified or assume other break models use identical numbering.
 
+The user notes that pivot points are an SFC3-era feature and are not required for OP. The experimental importer therefore does not warn about absent pivot records; it preserves named points when present. FCA's records suggest OP files can contain extra information, but whether the OP engine ignores those records has not been verified. Do not infer that arbitrary extra fields or materials are safe to export.
+
 ## Material table comparison
 
 The installed OP FCA has unused untextured entries at indices 0–2, but the local `fca_sfc1.MOD` and `fca_sfc2.MOD` each use index 1 (`misc2`) for 394 polygons and index 2 (`defrim`) for 48 polygons. Index 0 is unused in those samples. Material entries and indices must be preserved per file; the first three slots are not universally filler.

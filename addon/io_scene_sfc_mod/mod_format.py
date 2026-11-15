@@ -78,6 +78,16 @@ def inspect_geometry(data):
     return {'vertices': vertices, 'polygons': polygons, 'unknown': unknown}
 
 
+def group_break_polygons(mesh):
+    groups = {}
+    for polygon in mesh['polygons']:
+        ids = {struct.unpack_from('<H', corner['raw'], 2)[0] for corner in polygon['corners']}
+        if len(ids) != 1:
+            raise ValueError('Break polygon has inconsistent piece identifiers')
+        groups.setdefault(ids.pop(), []).append(polygon)
+    return groups
+
+
 def parse_model(data):
     chunks = inspect(data)
     def payload(tag, required=True):

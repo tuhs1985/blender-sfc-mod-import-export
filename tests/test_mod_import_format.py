@@ -5,6 +5,17 @@ from pathlib import Path
 
 
 class ImportFormatTests(unittest.TestCase):
+    def test_piece_groups_reject_mixed_corner_ids(self):
+        spec = importlib.util.spec_from_file_location('mod_format', Path(__file__).resolve().parents[1] / 'addon' / 'io_scene_sfc_mod' / 'mod_format.py')
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        def corner(group):
+            return {'raw': struct.pack('<HH', 0, group) + bytes(24)}
+        valid = {'polygons': [{'corners': [corner(2), corner(2), corner(2)]}, {'corners': [corner(0), corner(0), corner(0)]}]}
+        self.assertEqual(sorted(module.group_break_polygons(valid)), [0, 2])
+        with self.assertRaises(ValueError):
+            module.group_break_polygons({'polygons': [{'corners': [corner(0), corner(1), corner(0)]}]})
+
     def test_named_point_and_material_slots(self):
         spec = importlib.util.spec_from_file_location('mod_format', Path(__file__).resolve().parents[1] / 'addon' / 'io_scene_sfc_mod' / 'mod_format.py')
         module = importlib.util.module_from_spec(spec)

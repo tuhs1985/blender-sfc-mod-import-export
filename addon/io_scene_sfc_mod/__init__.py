@@ -1,7 +1,7 @@
 bl_info = {
     'name': 'Starfleet Command OP MOD Import',
     'author': 'SFC MOD project',
-    'version': (0, 1, 0),
+    'version': (0, 2, 0),
     'blender': (4, 3, 0),
     'location': 'File > Import',
     'description': 'Import observed Orion Pirates MOD models',
@@ -10,18 +10,31 @@ bl_info = {
 
 import math
 import json
+import re
 from pathlib import Path
 import bpy
+from mathutils import Vector
 from bpy.props import StringProperty
 from bpy_extras.io_utils import ImportHelper
-from .mod_format import parse_model
+from .mod_format import parse_model, group_break_polygons
 
 
 def import_model(context, filepath):
     path = Path(filepath)
-    if path.stem.casefold().endswith('_brk'):
-        raise ValueError('Break-model piece import is not supported yet')
+    is_break = path.stem.casefold().endswith('_brk')
     model = parse_model(path.read_bytes())
+    if is_break and len(model['meshes']) != 1:
+        raise ValueError('Break model must contain one geometry chunk')
+    groups = group_break_polygons(model['meshes'][0]) if is_break else None
+    pivots = {}
+    if is_break:
+        for point in model['points']:
+            match = re.fullmatch(re.escape(path.stem) + r'_(\d+)pivot', point['name'], re.IGNORECASE)
+            if match:
+                key = int(match.group(1)) - 1
+                if key in pivots:
+                    raise ValueError('Duplicate numbered break pivot')
+                pivots[key] = point
     available = {p.name.casefold(): p for p in path.parent.iterdir() if p.is_file()}
     warnings = []
     collection = bpy.data.collections.new(f'SFC MOD: {path.stem}')
@@ -65,14 +78,24 @@ def import_model(context, filepath):
                         mat.node_tree.links.new(node.outputs['Color'], mix.inputs[2])
                         mat.node_tree.links.new(mix.outputs['Color'], shader.inputs['Emission Color'])
                         shader.inputs['Emission Strength'].default_value = 1.0
-        for number, source in enumerate(model['meshes'], 1):
-            mesh = bpy.data.meshes.new(f'{path.stem} LOD {number}')
+        if is_break:
+            source = model['meshes'][0]
+            parts = [(group + 1, {'vertices': source['vertices'], 'polygons': polys}, pivots.get(group))
+                     for group, polys in sorted(groups.items())]
+        else:
+            parts = [(number, source, None) for number, source in enumerate(model['meshes'], 1)]
+        for number, source, pivot in parts:
+            mesh = bpy.data.meshes.new(f'{path.stem} {"piece" if is_break else "LOD"} {number}')
             mesh['mod_polygon_records'] = json.dumps([
                 (p['raw_header'] + b''.join(c['raw'] for c in p['corners'])).hex()
                 for p in source['polygons']
             ])
-            faces = [[p['corners'][i]['index'] for i in (1, 0, 2)] for p in source['polygons']]
-            mesh.from_pydata(source['vertices'], [], faces)
+            used = sorted({c['index'] for p in source['polygons'] for c in p['corners']}) if is_break else list(range(len(source['vertices'])))
+            remap = {old: new for new, old in enumerate(used)}
+            origin = Vector(pivot['position']) if pivot else Vector((0, 0, 0))
+            faces = [[remap[p['corners'][i]['index']] for i in (1, 0, 2)] for p in source['polygons']]
+            vertices = [Vector(source['vertices'][i]) - origin for i in used]
+            mesh.from_pydata(vertices, [], faces)
             mesh.update()
             uv = mesh.uv_layers.new(name='MOD UV')
             for mat in materials:
@@ -84,8 +107,16 @@ def import_model(context, filepath):
             obj = bpy.data.objects.new(mesh.name, mesh)
             collection.objects.link(obj)
             obj.rotation_euler.x = math.pi / 2
-            obj['mod_lod_index'] = number - 1
-            obj.hide_set(number != 1)
+            obj.location = (origin.x, -origin.z, origin.y)
+            if is_break:
+                obj['mod_piece_id'] = number - 1
+                obj['mod_vertex_indices'] = used
+                if pivot:
+                    obj['mod_pivot_name'] = pivot['name']
+                    obj['mod_pivot_position'] = pivot['position']
+            else:
+                obj['mod_lod_index'] = number - 1
+                obj.hide_set(number != 1)
         for point in model['points']:
             obj = bpy.data.objects.new(point['name'], None)
             collection.objects.link(obj)
@@ -117,7 +148,7 @@ class IMPORT_OT_sfc_mod(bpy.types.Operator, ImportHelper):
             self.report({'ERROR'}, f'MOD import failed: {exc}')
             return {'CANCELLED'}
         if warnings:
-            self.report({'WARNING'}, f'{len(warnings)} texture(s) missing: {warnings[0]}')
+            self.report({'WARNING'}, f'{len(warnings)} import warning(s): {warnings[0]}')
         return {'FINISHED'}
 
 
