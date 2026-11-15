@@ -12,5 +12,5 @@
 
 ## 3. Blender export and integration
 
-- [ ] 3.1 Add a safe standard MOD export operator that validates before writing and protects existing destinations; test success and failure in Blender.
+- [x] 3.1 Add a safe standard MOD export operator that validates before writing and protects existing destinations; test success and failure in Blender.
 - [ ] 3.2 Run full synthetic and original FCA round-trip tests, document limitations, and prepare for user-directed OP validation.
