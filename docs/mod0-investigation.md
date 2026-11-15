@@ -50,10 +50,18 @@ The R4 importer at `100014c0` reads each `POLY` payload as two 32-bit values, 12
 
 The R4 material reader at `10001410` reads a 28-byte base record and an extra eight bytes when flag `0x20` is set. In FCA, the 32-bit values at material-record offsets 24 and 32 resolve to diffuse and illumination texture stems in `STRS` for textured records. Mapping is based on the observed sample and importer code; other flags and record fields remain unverified.
 
+## Winding and coordinates
+
+For every triangle in the original OP FCA's three LODs (376, 376, and 140 respectively), the cross product of the stored corner order has a negative dot product with the three floats in the polygon header interpreted as a face normal. Reversing the first two corners makes those directions agree for all 892 triangles. The R4 importer assigns triangle corner indices in the corresponding order `[1, 0, 2]`; it also assigns UV coordinates to those matching corners. This is strong FCA evidence, not yet proof for every model.
+
+The importer's point and mesh code calls Max `RotateY` by `-pi/2` and `RotateX` by `+pi/2` (constants decoded from the original R4 binary). The precise equivalent Blender transform depends on Max's matrix conventions and multiplication order, which have not yet been verified. Do not copy these rotations directly into Blender on assumption alone.
+
+A local Blender 5.0.1 experiment generated `output/fca-geometry-preview.blend` from the installed FCA. It retains raw MOD coordinates and UV values, reverses triangle winding, and contains three geometry objects; only the first is initially visible. Blender reported all 892 generated face normals aligned with the stored face-normal values. This checks the constructed mesh and winding, not native OP orientation, custom corner normals, appearance, or in-game parity. It has no materials, textures, hardpoints, damage points, or break pieces and is not an add-on. The generated game-derived preview stays ignored by Git.
+
 `fca_brk.mod` (SHA-256 `0f4c91452039c628daefd339585689f46ec5c152e55368776d8f476260bb6a4c`) has one `MOD0` with 351 vertex records and 661 polygons. Its `PNTS` payload is 112 bytes, consistent with seven 16-byte records, and `STRS` contains seven names from `fca_brk_1pivot` through `fca_brk_7pivot`. The association between those records, pivot names and geometry sections still needs decoding. These files provide an OP multi-LOD reference, not proof of behavior for every OP model.
 
 The captured F-CA Blender fixture also has 6,370 triangles, but matching counts do not prove identical input geometry or ordering. The break runtime capture reports 3,497 shared positions, distinct from the 6,766 records observed in this particular local break file; these must not be assumed to be equivalent assets or representations.
 
 ## Next investigation
 
-Verify corner normals, winding and coordinate conversion against known file data and controlled Blender/game comparisons. Decode the FCA LOD distances, remaining material flags and break-pivot associations. Build synthetic tests for each proven field before exposing it as an importer feature; do not apply the Remix adapter's UV conversion to MOD data without direct evidence.
+Verify coordinate conversion and corner-normal behavior against controlled Blender/game comparisons. Decode the FCA LOD distances, remaining material flags and break-pivot associations. Build synthetic tests for each proven field before exposing it as an importer feature; do not apply the Remix adapter's UV conversion to MOD data without direct evidence.
