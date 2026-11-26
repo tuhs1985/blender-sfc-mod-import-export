@@ -2,6 +2,8 @@
 
 This project develops an experimental Blender add-on for importing and exporting Starfleet Command: Orion Pirates `.mod` models. SFC3-specific features are outside the current scope.
 
+For installation and step-by-step Blender workflows, see the [user guide](docs/user-guide.md).
+
 ## Inspect a MOD container
 
 With Python installed, run:
