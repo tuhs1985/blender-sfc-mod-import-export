@@ -53,3 +53,9 @@ On 2026-11-24, the user reported that an unchanged original OP FCA exported to t
 On 2026-11-25, the user reported an in-game test confirming that exported hardpoints, damage points, diffuse maps and illumination maps worked correctly. The user clarified that this in-game confirmation supersedes a separate MOD Viewer check for the test.
 
 MOD texture references in the checked originals use local stems. Two distinct images such as `C:\A\hull.png` and `C:\B\hull.bmp` both encode to `hull`, so the game cannot distinguish them by the stored reference. The exporter warns about such collisions and continues; it does not impose a texture-format restriction.
+
+## String encoding and overwrite checks
+
+On 2026-11-25, a scan of 363 STRS chunks in the installed OP model tree found no string entries containing bytes above ASCII. This does not establish which encoding OP expects for non-ASCII names. The current add-on reads and writes these references as ASCII; non-ASCII point names or texture stems may fail. File and folder paths themselves are not MOD string references. Avoid treating ASCII as a verified game restriction or guessing a replacement encoding without evidence.
+
+Blender background checks verify that unchecking both overwrite choices leaves both existing files unchanged; selecting just one replaces only that file. The checks also confirm that a changed or newly appeared destination is not overwritten. The separate interactive Cancel button was not exercised in this check.

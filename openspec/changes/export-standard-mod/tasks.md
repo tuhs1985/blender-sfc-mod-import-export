@@ -34,6 +34,8 @@
 - [x] 5.2 Find connected material shaders without relying on their display names; preserve texture assignments and report images with no usable file reference.
 - [x] 5.3 Investigate and update derived size metadata when geometry changes; retain unchanged source values for unchanged models.
 - [x] 5.4 Support standard-model transforms, evaluated geometry, and models without UV layers without judging mesh quality; allow the full 65,536-vertex index range.
-- [ ] 5.5 Investigate non-ASCII string encoding; do not assume a specific game code page.
+- [x] 5.5 Investigate non-ASCII string encoding: installed OP examples contain ASCII-only strings, so the game code page remains unknown; document the current add-on limitation without guessing.
 - [x] 5.6 Preserve imported LOD distances, initialize new distances using D4v1ks' 100-unit baseline, and offer an opt-in export dialog for editing them; verify serialization and Blender integration.
 - [x] 5.7 Close LOD transition checks based on the user's acceptance of the MOD Viewer checkout. Individual distance-triggered switching edge cases were not independently verified.
+- [x] 5.8 Document collection selection, separately imported standard and break pairing, and how to avoid ambiguous extra collection membership or duplicate imports. The user chose workflow instructions for now; the underlying selection behavior remains unchanged.
+- [ ] 5.9 Create a proper user guide covering installation, import, editing, model collection grouping and naming, standard/break export modes, LOD settings, textures, overwrite choices and viewing export messages. Include the grouping workflow currently documented in the README.

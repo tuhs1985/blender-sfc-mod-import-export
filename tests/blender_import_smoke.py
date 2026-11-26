@@ -146,6 +146,9 @@ with tempfile.TemporaryDirectory() as folder:
     state = {'active': sphere.name, 'paths': {'standard': str(auto_standard), 'break': str(auto_break)},
              'snapshots': {str(p): addon.destination_snapshot(p) for p in (auto_standard, auto_break)}}
     import json
+    assert bpy.ops.export_scene.sfc_mod_confirm(payload=json.dumps(state), overwrite_standard=False, overwrite_break=False) == {'CANCELLED'}
+    assert auto_standard.read_bytes() == b'original standard'
+    assert auto_break.read_bytes() == b'original break'
     assert bpy.ops.export_scene.sfc_mod_confirm(payload=json.dumps(state), overwrite_standard=True, overwrite_break=False) == {'FINISHED'}
     assert addon.parse_model(auto_standard.read_bytes())['meshes']
     assert auto_break.read_bytes() == b'original break'

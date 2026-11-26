@@ -4,6 +4,12 @@
 
 Review of the current Blender add-on, including a second independent read-only review and controlled Blender 5.0.1 probes. This records implementation behavior and hypotheses; it does not establish Orion Pirates renderer behavior. Original model assets stay local.
 
+## Collection selection follow-up — 2026-11-25
+
+A Blender background probe created separate imported-style `fca.mod` and `fca_brk.mod` collections plus an unrelated `kca.mod` collection. Selecting an object in either FCA collection found both FCA collections and excluded KCA. Linking the selected FCA standard mesh into an additional artist collection whose name sorted first caused discovery to select that unrelated collection instead. A duplicate imported standard collection with the same source basename produced an explicit multiple-collection error. These are synthetic collection-discovery checks, not a test of every multi-scene or multi-model arrangement. Prefer the selected object's imported model collection when identifiable, while retaining pairing with the separately imported break collection; duplicate imported models still need a deliberate selection strategy.
+
+The user chose to address this through instructions on grouping and exporter selection for now. The README describes the supported organization and the conditions to avoid; exporter behavior has not been changed.
+
 ## High-priority data loss or incorrect metadata
 
 - A correctly named mesh newly added to an imported model is ignored unless it also has the internal ID property. A controlled test linked `fca_4` to imported FCA: the scene contained four LOD meshes, but the exported file still contained three, without a missing-LOD warning. Independent review reproduced the equivalent issue with a new `fca_brk_99` mesh. Export discovery must honor the naming convention as well as retained IDs, and avoid silently dropping pieces.

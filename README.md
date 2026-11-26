@@ -34,6 +34,27 @@ For the installed OP reference, select `C:\Program Files (x86)\Taldren Software 
 
 ## Experimental standard-model exporter
 
+### Organizing models for export
+
+For a model imported from MOD files, import the standard file and then its break file normally. Each import creates its own collection. For example:
+
+```text
+SFC MOD: fca
+    fca_1, fca_2, fca_3       (standard LOD meshes)
+    hardpoints and damage points
+SFC MOD: fca_brk
+    fca_brk_1, fca_brk_2, ... (break meshes)
+    any points from the break file
+```
+
+Keep each imported mesh and its associated points directly in its original model collection. Select a mesh or point from either collection before exporting. The exporter pairs imported standard and break collections by their original source filenames: `fca.mod` and `fca_brk.mod` match. Choose **Auto** to export both if available, or choose one of the individual output modes. The name you choose in the export dialog determines the output filenames.
+
+Avoid linking an export object into additional collections: the exporter currently takes the first eligible collection, which may not be its original model collection. Use one imported standard collection and one imported break collection per source basename in a scene; importing a second `fca.mod`, even from another folder, can make the pair ambiguous and stop export. Imported LOD and break meshes retain their original IDs, so renaming an existing mesh does not require changing its ID. Newly added objects need the matching names shown above.
+
+For a model made in Blender, put the standard meshes, break meshes and relevant point empties directly in **one** model collection. Name multiple standard LOD meshes `fca_1`, `fca_2`, and so on; name break meshes `fca_brk_1`, `fca_brk_2`, and so on. Select one of those meshes to identify the model. A single standard mesh without an LOD-style name can be exported as one LOD. Keep unrelated ships and their points in separate collections. The exporter reads objects directly in the selected model collection; do not rely on objects placed only inside nested child collections.
+
+For now, use ASCII characters for point names and texture filenames referenced by MOD files. The add-on currently uses ASCII for those references; the game encoding for other characters has not been established. This restriction concerns the names stored inside the MOD, not the surrounding folder path.
+
 The add-on includes **File > Export > Starfleet Command 1/2/OP/3 (.mod)** for supported standard models imported with this version. Select a mesh or point in the imported model collection first. It preserves the original file's undecoded records and supports changes to UVs, face material indices, existing point positions/names and existing texture image references. It validates before writing, reports textures outside the save folder, and stores the complete warning list in a Blender Text Editor document.
 
 New Blender models can be exported experimentally: place their mesh objects and named point empties in one collection, name multiple LOD meshes with a common prefix and numeric suffix (for example `fca_1`, `fca_2`), select one mesh, and export. A mesh without that naming pattern exports as a single LOD. The evaluated meshes are triangulated; UVs, diffuse and emission images, and collection empties are encoded. If a mesh belongs to several collections, the first eligible collection is used. Imported models can include added or removed named LODs, object transforms and evaluated modifiers. Changed geometry recalculates the header radius and old-plugin-style normals; unchanged geometry retains original values. Existing LOD transition distances are retained; the user accepted the MOD Viewer LOD checkout as sufficient. Blender smoothing settings and some shader settings are not encoded. Added or removed points and material slots and changed texture assignments are encoded. The user reports successful OP tests of an exported custom single-LOD FCA and a multi-LOD KCA before these newer edits were implemented.
