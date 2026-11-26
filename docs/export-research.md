@@ -12,6 +12,8 @@ An OP installation scan found 364 readable MOD headers, including eight standard
 
 On 2026-11-25, the user confirmed that the LOD distance option works and was satisfactory. The confirmation did not specify a test of actual distance-triggered switching in MOD Viewer or OP, which remains open.
 
+Closeout check on 2026-11-25: original installed OP FCA and KCA standard and break files all reproduced byte-for-byte through the geometry round-trip writer; the standard files each had three MOD0 chunks, the break files one each. This verifies serialization of those local files, not renderer or game behavior. The synthetic Python and Blender background suites and standard export OpenSpec validation also passed.
+
 ## Materials and points
 
 The R4 material reader loads 28-byte base records and reads eight extra bytes when flag `0x20` is set. In observed files, flag `0x01` marks a diffuse-map reference, while `0x20` accompanies the additional illumination-map reference. The importer tests `0x02` when assigning smoothing-related mesh information. Other flag meanings and the safety of modifying combinations have not been established. The Blender exporter now writes added or removed material slots and diffuse/illumination references while retaining available opaque source fields; controlled Blender and source-model checks have passed, but these changes still need a viewer or game check.

@@ -13,7 +13,7 @@
 ## 3. Blender export and integration
 
 - [x] 3.1 Add a safe standard MOD export operator that validates before writing and protects existing destinations; test success and failure in Blender.
-- [ ] 3.2 Run the relevant synthetic and original FCA round-trip tests, document limitations, and use MOD Viewer for user-directed development checks.
+- [x] 3.2 Run the relevant synthetic and original FCA round-trip tests, document limitations, and use MOD Viewer for user-directed development checks.
 
 ## 4. Experimental editing workflow
 
@@ -24,7 +24,7 @@
 - [x] 4.1e Do not warn about routine vertex and topology edits; retain actionable export warnings.
 - [x] 4.1f Implement authored LOD, point and diffuse/illumination export; verify synthetic Blender export and re-import.
 - [x] 4.1g Prevent protected-folder temporary-file creation from retrying permission errors indefinitely; report the destination error and test in Blender.
-- [ ] 4.1c Complete validation of authored LODs, point markers and illumination maps using MOD Viewer or an in-game test; an in-game test supersedes a separate viewer check for the same test.
+- [ ] 4.1c Validate newly authored multi-LOD models in MOD Viewer or OP. The user has already confirmed points and diffuse/illumination in game; those do not need a separate viewer check.
 - [ ] 4.2 Encode experimental mesh and other edits that are currently rejected, preserving the user's changes and reporting any that cannot yet be represented. Validate each edit with controlled tests; avoid silently writing the original data in place of edits.
 - [ ] 4.3 When the exporter is finished, prepare a sample for the user's optional OP test; record actual viewer and game results separately.
 
@@ -34,6 +34,6 @@
 - [x] 5.2 Find connected material shaders without relying on their display names; preserve texture assignments and report images with no usable file reference.
 - [x] 5.3 Investigate and update derived size metadata when geometry changes; retain unchanged source values for unchanged models.
 - [x] 5.4 Support standard-model transforms, evaluated geometry, and models without UV layers without judging mesh quality; allow the full 65,536-vertex index range.
-- [ ] 5.5 Investigate non-ASCII string encoding and verify transition-distance behavior for newly added LODs in MOD Viewer or OP.
+- [ ] 5.5 Investigate non-ASCII string encoding; do not assume a specific game code page.
 - [x] 5.6 Preserve imported LOD distances, initialize new distances using D4v1ks' 100-unit baseline, and offer an opt-in export dialog for editing them; verify serialization and Blender integration.
 - [ ] 5.7 Verify edited and newly initialized LOD transition behavior in MOD Viewer or OP.
