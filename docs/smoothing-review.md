@@ -55,3 +55,7 @@ There is an important lossless-round-trip detail: some original corner-normal ve
 4. Compare a controlled shared-vertex hard-edge fixture in OP with and without the split, plus its original plugin output, before selecting a default. Include unchanged binary round trips, non-unit and zero normals, multiple materials, and break pieces in that qualification.
 
 Until those tests, direct custom normals are a promising possibility, and automatic splitting is a compatibility fallback—not a proven replacement for the user's method. No smoothing implementation or game test was performed in this investigation.
+
+## Blender smoothing export follow-up
+
+The add-on now offers opt-in export preparation based on Blender shading boundaries, as well as an angle alternative. It splits temporary geometry and recalculates normals; it does not preserve exact custom normal vectors. On 2026-11-25 the user reported that a real-model test worked nicely and that smoothing was respected. The application used for the final appearance check was not specified, so this result is not recorded as a specific game or MOD Viewer test.

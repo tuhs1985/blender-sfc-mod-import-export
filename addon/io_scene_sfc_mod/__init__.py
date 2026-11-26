@@ -1,7 +1,7 @@
 bl_info = {
     'name': 'Starfleet Command 1/2/OP/3 MOD Import/Export',
     'author': 'SFC MOD project',
-    'version': (0, 3, 0),
+    'version': (0, 4, 0),
     'blender': (4, 3, 0),
     'location': 'File > Import',
     'description': 'Import and conservatively export Starfleet Command MOD models (experimental)',
@@ -18,8 +18,9 @@ import uuid
 import zlib
 from pathlib import Path
 import bpy
+import bmesh
 from mathutils import Vector
-from bpy.props import BoolProperty, EnumProperty, StringProperty, FloatVectorProperty
+from bpy.props import BoolProperty, EnumProperty, StringProperty, FloatVectorProperty, FloatProperty
 from bpy_extras.io_utils import ImportHelper, ExportHelper
 from .mod_format import inspect, parse_model, group_break_polygons, combine_break_geometry, rewrite_geometry, rewrite_records, texture_stem_collisions, write_chunk, write_geometry, recalculate_normals, update_lod_distances
 
@@ -208,8 +209,8 @@ def import_model(context, filepath):
     return warnings
 
 
-def prepare_standard_export(collection, destination):
-    return prepare_imported_export(bpy.context, collection, destination, break_mode=False)
+def prepare_standard_export(collection, destination, split_angle=None):
+    return prepare_imported_export(bpy.context, collection, destination, break_mode=False, split_angle=split_angle)
 
 
 class IMPORT_OT_sfc_mod(bpy.types.Operator, ImportHelper):
@@ -229,7 +230,7 @@ class IMPORT_OT_sfc_mod(bpy.types.Operator, ImportHelper):
         return {'FINISHED'}
 
 
-def prepare_new_mesh_export(context, obj, destination, break_mode=False):
+def prepare_new_mesh_export(context, obj, destination, break_mode=False, split_angle=None):
     """Build a MOD from a selected authored mesh and its model collection."""
     match = re.fullmatch(r'(.+)_(\d+)', obj.name)
     candidates = [c for c in obj.users_collection if c != context.scene.collection]
@@ -319,14 +320,14 @@ def prepare_new_mesh_export(context, obj, destination, break_mode=False):
         return material_lookup[key]
 
     for mesh_obj in meshes:
-        geometry = authored_geometry(context, mesh_obj, material_index)
+        geometry = authored_geometry(context, mesh_obj, material_index, split_angle=split_angle)
         if break_mode:
             name_match = re.fullmatch(r'.+_brk_(\d+)', mesh_obj.name, re.IGNORECASE)
             piece_id = int(mesh_obj['mod_piece_id']) if 'mod_piece_id' in mesh_obj else int(name_match.group(1)) - 1
             geometries.append((piece_id, geometry))
         else:
             geometries.append(geometry)
-        radius = max(radius, *(math.sqrt(sum(v*v for v in p)) for p in geometry['vertices']))
+        radius = max(radius, max((math.sqrt(sum(v*v for v in p)) for p in geometry['vertices']), default=0.0))
     if break_mode:
         geometries = [combine_break_geometry(sorted(geometries, key=lambda item: item[0]))]
     point_data = bytearray()
@@ -339,11 +340,11 @@ def prepare_new_mesh_export(context, obj, destination, break_mode=False):
     return b'MDLS' + struct.pack('<I', len(body)) + body, list(dict.fromkeys(warnings))
 
 
-def prepare_break_export(context, collection, destination):
-    return prepare_imported_export(context, collection, destination, break_mode=True)
+def prepare_break_export(context, collection, destination, split_angle=None):
+    return prepare_imported_export(context, collection, destination, break_mode=True, split_angle=split_angle)
 
 
-def prepare_imported_export(context, collection, destination, break_mode):
+def prepare_imported_export(context, collection, destination, break_mode, split_angle=None):
     """Write current imported geometry, materials, textures and point empties."""
     key = 'mod_piece_id' if break_mode else 'mod_lod_index'
     stem = Path(collection.get('mod_source_filename', '')).stem
@@ -477,7 +478,7 @@ def prepare_imported_export(context, collection, destination, break_mode):
                 return index
         raise ValueError('Mesh uses a material outside its slots')
     if break_mode:
-        geometries = [(number, authored_geometry(context, obj, material_index)) for number, obj, _ in numbered]
+        geometries = [(number, authored_geometry(context, obj, material_index, split_angle=split_angle)) for number, obj, _ in numbered]
         geometries = [combine_break_geometry(geometries)]
     else:
         geometries = []
@@ -485,16 +486,16 @@ def prepare_imported_export(context, collection, destination, break_mode):
             mesh = obj.data
             if len(mesh.vertices) > 65536:
                 raise ValueError('Mesh exceeds the MOD vertex index limit')
-            if mesh.has_custom_normals or any(edge.use_edge_sharp for edge in mesh.edges) or any(face.use_smooth for face in mesh.polygons):
+            if split_angle != 'BLENDER' and (mesh.has_custom_normals or any(edge.use_edge_sharp for edge in mesh.edges) or any(face.use_smooth for face in mesh.polygons)):
                 warnings.append(f'Blender smoothing settings on {obj.name} are not encoded')
             expected_rotation = (Vector((math.pi / 2, 0, 0)).x, 0.0, 0.0)
-            evaluated = (source_index is None or source_index >= len(model['meshes']) or obj.parent or obj.constraints or obj.modifiers or mesh.shape_keys or
+            evaluated = (split_angle is not None or source_index is None or source_index >= len(model['meshes']) or obj.parent or obj.constraints or obj.modifiers or mesh.shape_keys or
                     obj.rotation_mode != 'XYZ' or tuple(obj.location) != (0.0, 0.0, 0.0) or
                     tuple(obj.rotation_euler) != expected_rotation or tuple(obj.scale) != (1.0, 1.0, 1.0) or
                     tuple(obj.delta_location) != (0.0, 0.0, 0.0) or tuple(obj.delta_rotation_euler) != (0.0, 0.0, 0.0) or
                     tuple(obj.delta_scale) != (1.0, 1.0, 1.0))
             if evaluated:
-                geometry = authored_geometry(context, obj, material_index)
+                geometry = authored_geometry(context, obj, material_index, split_angle=split_angle)
                 geometry['_source_index'] = source_index if source_index is not None and source_index < len(model['meshes']) else None
                 geometries.append(geometry)
                 continue
@@ -552,14 +553,48 @@ def prepare_imported_export(context, collection, destination, break_mode):
     return b'MDLS' + struct.pack('<I', len(body)) + body, list(dict.fromkeys(warnings))
 
 
-def authored_geometry(context, obj, material_index):
+def authored_geometry(context, obj, material_index, split_angle=None):
     """Convert one evaluated Blender mesh to an SFC geometry record."""
     evaluated = obj.evaluated_get(context.evaluated_depsgraph_get())
     mesh = evaluated.to_mesh()
+    split_mesh = None
     try:
+        if split_angle is not None:
+            bm = bmesh.new()
+            try:
+                bm.from_mesh(mesh)
+                bm.normal_update()
+                if split_angle == 'BLENDER':
+                    sides = {}
+                    normals = mesh.corner_normals
+                    for face in mesh.polygons:
+                        loops = list(face.loop_indices)
+                        for i, loop_index in enumerate(loops):
+                            next_index = loops[(i + 1) % len(loops)]
+                            loop, following = mesh.loops[loop_index], mesh.loops[next_index]
+                            sides.setdefault(loop.edge_index, []).append({loop.vertex_index: normals[loop_index].vector.copy(),
+                                                                        following.vertex_index: normals[next_index].vector.copy()})
+                    bm.edges.ensure_lookup_table()
+                    edges = []
+                    for index, edge in enumerate(mesh.edges):
+                        adjacent = sides.get(index, [])
+                        if len(adjacent) != 2 or not bm.edges[index].is_manifold:
+                            continue
+                        if edge.use_edge_sharp or any((adjacent[0][vertex] - adjacent[1][vertex]).length_squared > 1e-10
+                                                     for vertex in edge.vertices):
+                            edges.append(bm.edges[index])
+                else:
+                    edges = [edge for edge in bm.edges if edge.is_manifold and edge.calc_face_angle(0.0) > split_angle]
+                if edges:
+                    bmesh.ops.split_edges(bm, edges=edges)
+                split_mesh = bpy.data.meshes.new('SFC export temporary mesh')
+                for material in mesh.materials:
+                    split_mesh.materials.append(material)
+                bm.to_mesh(split_mesh)
+            finally:
+                bm.free()
+            mesh = split_mesh
         mesh.calc_loop_triangles()
-        if not mesh.loop_triangles:
-            raise ValueError('Selected mesh has no faces to export')
         if len(mesh.vertices) > 65536:
             raise ValueError('Mesh exceeds the MOD vertex index limit')
         vertices = []
@@ -583,6 +618,8 @@ def authored_geometry(context, obj, material_index):
         return geometry
     finally:
         evaluated.to_mesh_clear()
+        if split_mesh is not None:
+            bpy.data.meshes.remove(split_mesh)
 
 
 def open_export_temp(directory):
@@ -701,7 +738,7 @@ def write_export_outputs(outputs, snapshots):
             temp_path.unlink(missing_ok=True)
 
 
-def prepare_selected_outputs(context, active, paths, include_empty_break_warnings=False):
+def prepare_selected_outputs(context, active, paths, include_empty_break_warnings=False, split_angle=None):
     choices = find_export_models(context, active)
     outputs, warnings = {}, []
     if include_empty_break_warnings and 'break' not in choices:
@@ -711,10 +748,10 @@ def prepare_selected_outputs(context, active, paths, include_empty_break_warning
             raise ValueError(f'The selected model no longer contains a {kind} model')
         collection, obj = choices[kind]
         if collection.get('mod_source_zlib_base64'):
-            data, notes = (prepare_break_export(context, collection, path) if kind == 'break'
-                           else prepare_standard_export(collection, path))
+            data, notes = (prepare_break_export(context, collection, path, split_angle=split_angle) if kind == 'break'
+                           else prepare_standard_export(collection, path, split_angle=split_angle))
         else:
-            data, notes = prepare_new_mesh_export(context, obj, path, break_mode=(kind == 'break'))
+            data, notes = prepare_new_mesh_export(context, obj, path, break_mode=(kind == 'break'), split_angle=split_angle)
         outputs[path] = data
         warnings.extend(notes)
     return outputs, list(dict.fromkeys(warnings))
@@ -744,12 +781,19 @@ class EXPORT_OT_sfc_mod_confirm(bpy.types.Operator):
     overwrite_break: BoolProperty(name='Overwrite break model', default=True)
     modify_distances: BoolProperty(name='Modify LOD distances', default=False)
     distances: FloatVectorProperty(name='LOD distances', size=5, default=(0., 100., 200., 300., 400.))
+    smoothing_mode: EnumProperty(name='Smoothing', items=[('NONE', 'Keep Current Export', 'Do not split faces'),
+                                                         ('BLENDER', 'Use Blender Smoothing', 'Split where Blender smoothing changes'),
+                                                         ('ANGLE', 'Split by Angle', 'Split edges above an angle')], default='NONE')
+    smoothing_angle: FloatProperty(name='Split angle', subtype='ANGLE', default=math.radians(45), min=0, max=math.pi)
 
     def invoke(self, context, event):
         return context.window_manager.invoke_props_dialog(self, width=480)
 
     def draw(self, context):
         state = json.loads(self.payload)
+        self.layout.prop(self, 'smoothing_mode')
+        if self.smoothing_mode == 'ANGLE':
+            self.layout.prop(self, 'smoothing_angle')
         if 'standard' in state['paths']:
             self.layout.prop(self, 'modify_distances')
             if self.modify_distances:
@@ -770,7 +814,8 @@ class EXPORT_OT_sfc_mod_confirm(bpy.types.Operator):
             if not paths:
                 self.report({'INFO'}, 'No files selected for export')
                 return {'CANCELLED'}
-            outputs, warnings = prepare_selected_outputs(context, active, paths, state.get('include_empty_break_warnings', False))
+            split_angle = 'BLENDER' if self.smoothing_mode == 'BLENDER' else self.smoothing_angle if self.smoothing_mode == 'ANGLE' else None
+            outputs, warnings = prepare_selected_outputs(context, active, paths, state.get('include_empty_break_warnings', False), split_angle=split_angle)
             if self.modify_distances and 'standard' in paths:
                 path = paths['standard']
                 outputs[path] = update_lod_distances(outputs[path], distances=self.distances)
@@ -806,7 +851,7 @@ class EXPORT_OT_sfc_mod(bpy.types.Operator, ExportHelper):
                 return {'CANCELLED'}
             paths = output_paths(self.filepath, self.output_mode, 'standard' in choices, 'break' in choices)
             snapshots = {str(path): destination_snapshot(path) for path in paths.values()}
-            if ('standard' in paths and not bpy.app.background) or any(snapshot is not None for snapshot in snapshots.values()):
+            if not bpy.app.background or any(snapshot is not None for snapshot in snapshots.values()):
                 if bpy.app.background:
                     raise ValueError('Overwrite confirmation requires an interactive Blender session')
                 preview, _ = prepare_selected_outputs(context, active, paths, self.output_mode != 'STANDARD')

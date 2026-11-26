@@ -25,7 +25,7 @@
 - [x] 4.1f Implement authored LOD, point and diffuse/illumination export; verify synthetic Blender export and re-import.
 - [x] 4.1g Prevent protected-folder temporary-file creation from retrying permission errors indefinitely; report the destination error and test in Blender.
 - [x] 4.1c Close the multi-LOD viewer checkout based on the user's acceptance of the MOD Viewer result. The user also confirmed points and diffuse/illumination in game; separate edge-case tests are not required for closeout.
-- [ ] 4.2 Encode experimental mesh and other edits that are currently rejected, preserving the user's changes and reporting any that cannot yet be represented. Validate each edit with controlled tests; avoid silently writing the original data in place of edits.
+- [x] 4.2 Resolve the closeout review: allow empty standard meshes, retain the user's unique numbering convention for LODs and break pieces, and document standard ASCII references and the post-smoothing 16-bit vertex limit. The user closed the speculative unknown-geometry question for OP after the installed-model scan found none.
 - [ ] 4.3 When the exporter is finished, prepare a sample for the user's optional OP test; record actual viewer and game results separately.
 
 ## 5. Review findings

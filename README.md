@@ -21,7 +21,7 @@ Add `--geometry` to decode observed `MOD0` records and report vertex, polygon, a
 The source add-on is in `addon/io_scene_sfc_mod/`; a local installable archive can be created with:
 
 ```powershell
-python -c "from pathlib import Path; from zipfile import ZipFile, ZIP_DEFLATED; p=Path('addon/io_scene_sfc_mod'); z=ZipFile('output/io_scene_sfc_mod.zip','w',ZIP_DEFLATED); [z.write(p/n, 'io_scene_sfc_mod/'+n) for n in ('__init__.py','mod_format.py')]; z.close()"
+python -c "from pathlib import Path; from zipfile import ZipFile, ZIP_DEFLATED; p=Path('addon/io_scene_sfc_mod'); Path('output').mkdir(exist_ok=True); z=ZipFile('output/io_scene_sfc_mod.zip','w',ZIP_DEFLATED); [z.write(p/n, 'io_scene_sfc_mod/'+n) for n in ('__init__.py','mod_format.py')]; z.write('docs/user-guide.md', 'io_scene_sfc_mod/USER_GUIDE.md'); z.close()"
 ```
 
 Install the archive through Blender's add-on preferences, enable **Starfleet Command 1/2/OP/3 MOD Import/Export**, then use **File > Import > Starfleet Command 1/2/OP/3 (.mod)**. This experimental version imports observed standard models as separate LOD meshes and `_brk` models as separate pieces, with point empties, material slots, diffuse maps and approximate illumination. It has been tested in Blender 5.0.1 with original OP FCA and other local examples; compatibility with every game version remains unverified. Break pieces use matching numbered pivots when present; when absent, origins remain at the model origin without a warning. Geometry orientation beyond the confirmed FCA, pivot semantics across other models, corner normals, smoothing and game round-trip fidelity still need verification.
@@ -89,6 +89,6 @@ See [model manual notes](docs/model-manual-op-notes.md) for the Orion Pirates sc
 
 ## Next steps
 
-Investigate the MOD format and representative files, identify game-version differences, and establish round-trip tests before implementing the Blender add-on. Keep original game assets and third-party binaries out of the repository unless their redistribution is authorized.
+Complete the remaining closeout review and retain the optional final Orion Pirates sample for the user's in-game check. Keep original game assets and third-party binaries out of the repository unless their redistribution is authorized.
 
 Substantive changes use [OpenSpec](https://github.com/Fission-AI/OpenSpec). Project context and change artifacts live in `openspec/`; Codex workflow skills are in `.agents/skills/`.

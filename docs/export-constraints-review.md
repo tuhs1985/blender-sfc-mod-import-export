@@ -10,6 +10,18 @@ A Blender background probe created separate imported-style `fca.mod` and `fca_br
 
 The user chose to address this through instructions on grouping and exporter selection for now. The README describes the supported organization and the conditions to avoid; exporter behavior has not been changed.
 
+## Closeout review — 2026-11-25
+
+- **Empty standard meshes:** `authored_geometry` rejects evaluated meshes with no triangles, although a synthetic zero-vertex, zero-polygon MOD0 was serialized and parsed successfully by the project's binary writer. The engine and MOD Viewer behavior for that synthetic record is not established. The rejection is an add-on choice, not a demonstrated binary requirement; empty break pieces are already skipped and reported by user request. Removing this rejection also requires handling the empty vertex list in radius calculation.
+- **Duplicate model numbers:** Imported meshes use numeric LOD or piece identifiers, with name-based fallback; unresolved duplicates or invalid IDs stop export. Break polygon corner records store a 16-bit piece ID, and assigning the same ID to separate pieces would make them indistinguishable. A future exporter could allocate distinct IDs for duplicates instead of requiring manual renaming, but it needs a deterministic assignment strategy. LODs are serialized in order, so the same piece-ID reasoning should not automatically be applied to LOD ordering.
+- **Non-ASCII references:** The add-on currently encodes/decodes model string references as ASCII. A scan found no high-byte strings in 363 installed OP STRS chunks; this does not establish a game encoding. Keep the limitation documented until there is evidence rather than claiming OP forbids such names.
+- **Unknown nested geometry chunks:** A scan of 705 geometry chunks in the installed OP models found no unknown nested records. The user closed this as a speculative concern for the current OP scope. The existing writer still rejects an unrecognized nested record if encountered rather than discard it.
+- **Vertex index width:** The code supports indices 0–65535, and the observed corner record uses a 16-bit vertex index. This is a binary representation limit, not a judgment about model quality. Smoothing splits can increase the number of exported vertices.
+
+These are research findings and suggested directions, not new OP runtime guarantees. The review did not change exporter behavior.
+
+On 2026-11-26 the user approved allowing empty standard meshes, chose to retain unique numbering as a user naming convention, and requested clear ASCII and post-smoothing vertex-limit instructions. The exporter now serializes standard meshes with no faces, including meshes with no vertices; Blender background tests cover both zero-vertex and loose-vertex cases. Engine and MOD Viewer handling of these empty files has not been verified. Empty break pieces continue to be skipped and reported.
+
 ## High-priority data loss or incorrect metadata
 
 - A correctly named mesh newly added to an imported model is ignored unless it also has the internal ID property. A controlled test linked `fca_4` to imported FCA: the scene contained four LOD meshes, but the exported file still contained three, without a missing-LOD warning. Independent review reproduced the equivalent issue with a new `fca_brk_99` mesh. Export discovery must honor the naming convention as well as retained IDs, and avoid silently dropping pieces.

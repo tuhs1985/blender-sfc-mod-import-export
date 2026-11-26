@@ -14,6 +14,76 @@ sys.path.insert(0, str(repo / 'addon'))
 import io_scene_sfc_mod as addon
 assert addon.bl_info['name'] == 'Starfleet Command 1/2/OP/3 MOD Import/Export'
 addon.register()
+empty_mesh = bpy.data.meshes.new('empty_standard_mesh')
+empty_obj = bpy.data.objects.new('empty_standard', empty_mesh)
+bpy.context.scene.collection.objects.link(empty_obj)
+with tempfile.TemporaryDirectory() as empty_folder:
+    empty_data, _ = addon.prepare_new_mesh_export(bpy.context, empty_obj, Path(empty_folder) / 'empty.mod')
+    empty_model = addon.parse_model(empty_data)
+    assert len(empty_model['meshes']) == 1
+    assert empty_model['meshes'][0]['vertices'] == []
+    assert empty_model['meshes'][0]['polygons'] == []
+    for mode in ('BLENDER', 0.7853981633974483):
+        prepared, _ = addon.prepare_new_mesh_export(bpy.context, empty_obj, Path(empty_folder) / 'empty.mod', split_angle=mode)
+        assert addon.parse_model(prepared)['meshes'][0]['vertices'] == []
+    bpy.ops.object.select_all(action='DESELECT')
+    empty_obj.select_set(True)
+    bpy.context.view_layer.objects.active = empty_obj
+    empty_path = Path(empty_folder) / 'empty_export.mod'
+    assert bpy.ops.export_scene.sfc_mod(filepath=str(empty_path)) == {'FINISHED'}
+    assert addon.parse_model(empty_path.read_bytes())['meshes'][0]['polygons'] == []
+    empty_mesh.from_pydata([(1, 2, 3)], [], [])
+    loose_data, _ = addon.prepare_new_mesh_export(bpy.context, empty_obj, Path(empty_folder) / 'loose.mod')
+    loose_model = addon.parse_model(loose_data)
+    assert len(loose_model['meshes'][0]['vertices']) == 1
+    assert loose_model['meshes'][0]['polygons'] == []
+bpy.data.objects.remove(empty_obj, do_unlink=True)
+angle_mesh = bpy.data.meshes.new('angle_split_source')
+angle_mesh.from_pydata([(0, 0, 0), (1, 0, 0), (0, 1, 0), (0, 0, 1)], [], [(0, 1, 2), (1, 0, 3)])
+angle_uv = angle_mesh.uv_layers.new(name='UVMap')
+for loop in angle_mesh.loops:
+    angle_uv.data[loop.index].uv = (loop.index / 10, loop.index / 20)
+angle_obj = bpy.data.objects.new('angle_split_source', angle_mesh)
+bpy.context.scene.collection.objects.link(angle_obj)
+normal_geometry = addon.authored_geometry(bpy.context, angle_obj, lambda mat: 0)
+split_geometry = addon.authored_geometry(bpy.context, angle_obj, lambda mat: 0, split_angle=0.7853981633974483)
+assert len(normal_geometry['vertices']) == 4
+assert len(split_geometry['vertices']) == 6
+assert len(split_geometry['polygons']) == 2
+assert any(corner['uv'][0] > 0 for polygon in split_geometry['polygons'] for corner in polygon['corners'])
+assert len(angle_mesh.vertices) == 4 and len(angle_mesh.polygons) == 2
+for face in angle_mesh.polygons:
+    face.use_smooth = True
+angle_mesh.update()
+smooth_geometry = addon.authored_geometry(bpy.context, angle_obj, lambda mat: 0, split_angle='BLENDER')
+assert len(smooth_geometry['vertices']) == 4
+shared_edge = next(edge for edge in angle_mesh.edges if set(edge.vertices) == {0, 1})
+shared_edge.use_edge_sharp = True
+angle_mesh.update()
+sharp_geometry = addon.authored_geometry(bpy.context, angle_obj, lambda mat: 0, split_angle='BLENDER')
+assert len(sharp_geometry['vertices']) == 6
+for face in angle_mesh.polygons:
+    face.use_smooth = False
+shared_edge.use_edge_sharp = False
+angle_mesh.update()
+assert len(addon.authored_geometry(bpy.context, angle_obj, lambda mat: 0, split_angle='BLENDER')['vertices']) == 6
+assert len(angle_mesh.vertices) == 4
+split_collection = bpy.data.collections.new('Smoothing test ship')
+bpy.context.scene.collection.children.link(split_collection)
+split_collection.objects.link(angle_obj)
+bpy.context.scene.collection.objects.unlink(angle_obj)
+angle_obj.name = 'shadertest_1'
+break_obj = angle_obj.copy()
+break_obj.data = angle_mesh.copy()
+break_obj.name = 'shadertest_brk_1'
+split_collection.objects.link(break_obj)
+paths = {'standard': Path(tempfile.gettempdir()) / 'shadertest.mod', 'break': Path(tempfile.gettempdir()) / 'shadertest_brk.mod'}
+outputs, _ = addon.prepare_selected_outputs(bpy.context, angle_obj, paths, split_angle='BLENDER')
+assert len(addon.parse_model(outputs[paths['standard']])['meshes'][0]['vertices']) == 6
+assert len(addon.parse_model(outputs[paths['break']])['meshes'][0]['vertices']) == 6
+assert len(angle_obj.data.vertices) == 4 and len(break_obj.data.vertices) == 4
+bpy.data.objects.remove(break_obj, do_unlink=True)
+bpy.data.objects.remove(angle_obj, do_unlink=True)
 large_mesh = bpy.data.meshes.new('index_boundary_mesh')
 large_mesh.from_pydata([(float(i), 0., 0.) for i in range(65536)], [], [(0, 1, 65535)])
 large_object = bpy.data.objects.new('index_boundary', large_mesh)
@@ -51,6 +121,7 @@ confirm_properties = bpy.ops.export_scene.sfc_mod_confirm.get_rna_type().propert
 assert confirm_properties['overwrite_standard'].default is True
 assert confirm_properties['overwrite_break'].default is True
 assert confirm_properties['modify_distances'].default is False
+assert confirm_properties['smoothing_mode'].default == 'NONE'
 with patch('builtins.open', side_effect=PermissionError('Access denied')) as denied_open:
     try:
         addon.open_export_temp(Path(tempfile.gettempdir()))

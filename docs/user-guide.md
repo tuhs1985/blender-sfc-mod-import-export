@@ -4,9 +4,9 @@ This guide covers the experimental Blender importer and exporter for Starfleet C
 
 ## 1. Install the add-on
 
-1. Obtain the installable `io_scene_sfc_mod.zip` archive. If you are building it from this repository, follow the archive command in the [README](../README.md).
+1. Download the installable `io_scene_sfc_mod-v0.4.0.zip` archive from the release. If you are building it from the project source, follow the archive command in the project README. This guide is also included in the ZIP as `io_scene_sfc_mod/USER_GUIDE.md`.
 2. In Blender, open **Edit > Preferences > Add-ons**.
-3. Open the add-ons menu in the upper right and choose **Install from Disk**. Select `io_scene_sfc_mod.zip`.
+3. Open the add-ons menu in the upper right and choose **Install from Disk**. Select the downloaded add-on ZIP.
 4. Enable **Starfleet Command 1/2/OP/3 MOD Import/Export** if Blender does not enable it automatically.
 5. Close Preferences. If an update gives an import error, close and restart Blender, then install or enable the updated archive again.
 
@@ -40,7 +40,9 @@ For a new model made in Blender, place the standard meshes, break meshes and the
 - Break pieces: `fca_brk_1`, `fca_brk_2`, and so on.
 - Points: use appropriately named Blender Empty objects, for example `Hardpoint1` and `a1`.
 
-An individual standard mesh without a numbered LOD name can be exported as one LOD. Imported meshes retain their original IDs, so existing imported objects can be renamed; give newly added meshes the matching numbered names. Empty break meshes are skipped and reported when other pieces are exported.
+Use a different number for each LOD and for each break piece; follow the numbering convention when adding or duplicating objects. An individual standard mesh without a numbered LOD name can be exported as one LOD. Imported meshes retain their original IDs, so existing imported objects can be renamed; give newly added meshes the matching numbered names. Empty break meshes are skipped and reported when other pieces are exported.
+
+Hardpoints and damage points are optional for export. A model with no point objects can still be exported.
 
 ## 4. Edit the model and textures
 
@@ -48,7 +50,7 @@ Select the mesh you want in the Outliner. You can edit its geometry, UVs and mat
 
 The importer attempts to find referenced textures beside the MOD file. Assign or replace image textures in the material as needed. Diffuse and illumination images are separate textures in the same Blender material: diffuse connects to the Principled shader's **Base Color**, and illumination connects to **Emission Color**. The add-on does not enforce an image format.
 
-The exported MOD stores local texture name references. OP looks in the model folder, so put the actual images beside the exported MOD yourself. The add-on reports textures outside the save folder; it does not copy or convert them. For now, use ASCII characters for point names and texture filenames referenced by the MOD; the game's encoding for other characters has not been established.
+The exported MOD stores local texture name references. OP looks in the model folder, so put the actual images beside the exported MOD yourself. The add-on reports textures outside the save folder; it does not copy or convert them. Use standard ASCII characters for point names and texture filenames referenced by the MOD, such as unaccented English letters, numbers and underscores; the game's encoding for other characters has not been established.
 
 ### View UVs for one material
 
@@ -70,6 +72,10 @@ If every face's UVs still appear, check the UV Editor's **UV Sync Selection** se
    - **Break Model Only** exports the destruction pieces.
 5. Click the export button. If a standard model is included, the **MOD Export Options** dialog offers **Modify LOD distances**, unchecked by default. Leave it unchecked to keep the existing or automatically initialized settings; check it to edit the distances shown.
 6. If an output file already exists, the options dialog lists an overwrite checkbox for it, checked by default. Uncheck an existing file to leave it untouched. Cancel the dialog to stop that export.
+
+In **MOD Export Options**, the **Smoothing** dropdown defaults to **Keep Current Export**. Choose **Use Blender Smoothing** to split exported vertices at Blender's sharp or shading boundaries, or choose **Split by Angle** and set an angle. These choices work on temporary export geometry; they do not detach faces in your Blender model. Normals are recalculated by the exporter, so exact custom normal directions are not retained. Check the resulting appearance in MOD Viewer.
+
+The export limit is 65,536 vertices per standard LOD or across the combined break model. Smoothing preparation can split vertices and increase the exported count. A mesh already near 65,000 vertices may exceed the limit after smoothing; one at 65,536 will exceed it if smoothing adds any vertices. Leave room below the limit when using smoothing preparation.
 
 Imported LOD distances are retained. New models start with `0, 100, 200, 300, 400`; when an imported model needs an additional distance, an empty entry is initialized using 100-unit spacing. No texture images are copied into the destination automatically.
 
