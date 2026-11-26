@@ -8,6 +8,10 @@ The R4 exporter writes a 36-byte payload header after the `MDLS` chunk header. I
 
 These observations support, but do not by themselves prove, that offset 20 is tolerance and the following five floats are LOD distance settings. Do not infer LOD count from the number of nonzero floats. The exporter can sort mesh records by name or polygon count; preserve explicit user-selected ordering. Confirm exact meanings and game behavior with controlled exports before editing these fields.
 
+An OP installation scan found 364 readable MOD headers, including eight standard models with four LODs. FCA uses 0, 180, 350, while other examples use 0, 1800, 5000 or four populated entries. R4 decompilation calls its dialog when more than one model object is found; its readme describes distance settings. D4v1ks' exporter initializes the five entries to 0, 100, 200, 300, 400. The Blender exporter retains imported values, initializes newly needed zero entries with that 100-unit baseline (extending the preceding distance when necessary), and allows optional editing in the export dialog. Runtime effects have not yet been independently confirmed.
+
+On 2026-11-25, the user confirmed that the LOD distance option works and was satisfactory. The confirmation did not specify a test of actual distance-triggered switching in MOD Viewer or OP, which remains open.
+
 ## Materials and points
 
 The R4 material reader loads 28-byte base records and reads eight extra bytes when flag `0x20` is set. In observed files, flag `0x01` marks a diffuse-map reference, while `0x20` accompanies the additional illumination-map reference. The importer tests `0x02` when assigning smoothing-related mesh information. Other flag meanings and the safety of modifying combinations have not been established. The Blender exporter now writes added or removed material slots and diffuse/illumination references while retaining available opaque source fields; controlled Blender and source-model checks have passed, but these changes still need a viewer or game check.

@@ -50,6 +50,7 @@ assert any('Break' in text for text in layout.labels)
 confirm_properties = bpy.ops.export_scene.sfc_mod_confirm.get_rna_type().properties
 assert confirm_properties['overwrite_standard'].default is True
 assert confirm_properties['overwrite_break'].default is True
+assert confirm_properties['modify_distances'].default is False
 with patch('builtins.open', side_effect=PermissionError('Access denied')) as denied_open:
     try:
         addon.open_export_temp(Path(tempfile.gettempdir()))
@@ -74,6 +75,7 @@ with tempfile.TemporaryDirectory() as folder:
     sphere_file = Path(folder) / 'new_sphere.mod'
     assert bpy.ops.export_scene.sfc_mod(filepath=str(sphere_file)) == {'FINISHED'}
     sphere_model = addon.parse_model(sphere_file.read_bytes())
+    assert struct.unpack_from('<5f', sphere_file.read_bytes(), 24) == (0., 100., 200., 300., 400.)
     assert len(sphere_model['meshes']) == 1
     assert len(sphere_model['meshes'][0]['polygons']) > 0
     assert len(sphere_model['materials']) >= 1

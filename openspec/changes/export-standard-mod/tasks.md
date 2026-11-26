@@ -35,3 +35,5 @@
 - [x] 5.3 Investigate and update derived size metadata when geometry changes; retain unchanged source values for unchanged models.
 - [x] 5.4 Support standard-model transforms, evaluated geometry, and models without UV layers without judging mesh quality; allow the full 65,536-vertex index range.
 - [ ] 5.5 Investigate non-ASCII string encoding and verify transition-distance behavior for newly added LODs in MOD Viewer or OP.
+- [x] 5.6 Preserve imported LOD distances, initialize new distances using D4v1ks' 100-unit baseline, and offer an opt-in export dialog for editing them; verify serialization and Blender integration.
+- [ ] 5.7 Verify edited and newly initialized LOD transition behavior in MOD Viewer or OP.

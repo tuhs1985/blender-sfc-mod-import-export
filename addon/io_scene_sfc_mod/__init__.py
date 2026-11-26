@@ -19,9 +19,9 @@ import zlib
 from pathlib import Path
 import bpy
 from mathutils import Vector
-from bpy.props import BoolProperty, EnumProperty, StringProperty
+from bpy.props import BoolProperty, EnumProperty, StringProperty, FloatVectorProperty
 from bpy_extras.io_utils import ImportHelper, ExportHelper
-from .mod_format import inspect, parse_model, group_break_polygons, combine_break_geometry, rewrite_geometry, rewrite_records, texture_stem_collisions, write_chunk, write_geometry, recalculate_normals
+from .mod_format import inspect, parse_model, group_break_polygons, combine_break_geometry, rewrite_geometry, rewrite_records, texture_stem_collisions, write_chunk, write_geometry, recalculate_normals, update_lod_distances
 
 
 def shader_defaults(shader):
@@ -333,7 +333,7 @@ def prepare_new_mesh_export(context, obj, destination, break_mode=False):
     for point in points:
         p = point.matrix_world.translation
         point_data.extend(struct.pack('<3fI', p.x, p.z, -p.y, string_offset(point.name)))
-    header = struct.pack('<IfI6f', 0x200, radius, len(geometries), 5., 0., 180., 350., 0., 0.)
+    header = struct.pack('<IfI6f', 0x200, radius, len(geometries), 5., 0., 100., 200., 300., 400.)
     body = header + write_chunk(b'STRS', strings) + write_chunk(b'PNTS', point_data) + write_chunk(b'MATS', b''.join(material_records))
     body += b''.join(write_chunk(b'MOD0', write_geometry(geometry)) for geometry in geometries)
     return b'MDLS' + struct.pack('<I', len(body)) + body, list(dict.fromkeys(warnings))
@@ -738,17 +738,25 @@ def report_export_warnings(operator, warnings):
 
 class EXPORT_OT_sfc_mod_confirm(bpy.types.Operator):
     bl_idname = 'export_scene.sfc_mod_confirm'
-    bl_label = 'Confirm MOD Overwrite'
+    bl_label = 'MOD Export Options'
     payload: StringProperty(options={'HIDDEN'})
     overwrite_standard: BoolProperty(name='Overwrite standard model', default=True)
     overwrite_break: BoolProperty(name='Overwrite break model', default=True)
+    modify_distances: BoolProperty(name='Modify LOD distances', default=False)
+    distances: FloatVectorProperty(name='LOD distances', size=5, default=(0., 100., 200., 300., 400.))
 
     def invoke(self, context, event):
         return context.window_manager.invoke_props_dialog(self, width=480)
 
     def draw(self, context):
         state = json.loads(self.payload)
-        self.layout.label(text='Select existing files to overwrite:')
+        if 'standard' in state['paths']:
+            self.layout.prop(self, 'modify_distances')
+            if self.modify_distances:
+                for index in range(1, min(state['lod_count'], 5)):
+                    self.layout.prop(self, 'distances', index=index, text=f'LOD {index + 1} distance')
+        if any(value is not None for value in state['snapshots'].values()):
+            self.layout.label(text='Select existing files to overwrite:')
         for kind, name in state['paths'].items():
             if state['snapshots'][name] is not None:
                 self.layout.prop(self, 'overwrite_' + kind, text='Overwrite ' + Path(name).name)
@@ -763,6 +771,9 @@ class EXPORT_OT_sfc_mod_confirm(bpy.types.Operator):
                 self.report({'INFO'}, 'No files selected for export')
                 return {'CANCELLED'}
             outputs, warnings = prepare_selected_outputs(context, active, paths, state.get('include_empty_break_warnings', False))
+            if self.modify_distances and 'standard' in paths:
+                path = paths['standard']
+                outputs[path] = update_lod_distances(outputs[path], distances=self.distances)
             write_export_outputs(outputs, state['snapshots'])
             report_export_warnings(self, warnings)
             return {'FINISHED'}
@@ -795,11 +806,15 @@ class EXPORT_OT_sfc_mod(bpy.types.Operator, ExportHelper):
                 return {'CANCELLED'}
             paths = output_paths(self.filepath, self.output_mode, 'standard' in choices, 'break' in choices)
             snapshots = {str(path): destination_snapshot(path) for path in paths.values()}
-            if any(snapshot is not None for snapshot in snapshots.values()):
+            if ('standard' in paths and not bpy.app.background) or any(snapshot is not None for snapshot in snapshots.values()):
                 if bpy.app.background:
                     raise ValueError('Overwrite confirmation requires an interactive Blender session')
-                payload = json.dumps({'active': active.name, 'paths': {k: str(v) for k, v in paths.items()}, 'snapshots': snapshots, 'include_empty_break_warnings': self.output_mode != 'STANDARD'})
-                result = bpy.ops.export_scene.sfc_mod_confirm('INVOKE_DEFAULT', payload=payload)
+                preview, _ = prepare_selected_outputs(context, active, paths, self.output_mode != 'STANDARD')
+                standard = preview.get(paths.get('standard'))
+                lod_count = struct.unpack_from('<I', standard, 16)[0] if standard else 0
+                distances = struct.unpack_from('<5f', standard, 24) if standard else (0., 100., 200., 300., 400.)
+                payload = json.dumps({'active': active.name, 'paths': {k: str(v) for k, v in paths.items()}, 'snapshots': snapshots, 'include_empty_break_warnings': self.output_mode != 'STANDARD', 'lod_count': lod_count})
+                result = bpy.ops.export_scene.sfc_mod_confirm('INVOKE_DEFAULT', payload=payload, distances=distances)
                 return {'CANCELLED'} if 'CANCELLED' in result else {'FINISHED'}
             outputs, warnings = prepare_selected_outputs(context, active, paths, self.output_mode != 'STANDARD')
             write_export_outputs(outputs, snapshots)

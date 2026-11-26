@@ -18,6 +18,8 @@ For Blender authoring, use LOD objects named `fca_1`, `fca_2`, etc., exported to
 
 Use five standard-model LODs as the user's working maximum assumption until further evidence, not as a proven OP limit or a new hard rejection. Break-piece counts are separate and have no assumed maximum; do not apply the LOD assumption to them.
 
+Keep imported LOD transition values, including populated values beyond the original LOD count. Initialize newly needed zero entries with D4v1ks' 100-unit baseline, extending from the preceding value where needed to avoid reversing the sequence. Authored models start at 0, 100, 200, 300, 400. An export dialog offers optional distance editing, disabled by default, alongside any overwrite choices. Exact runtime behavior remains to be verified.
+
 Alternatives considered: writing a file directly from scratch would require guessing unknown header fields; replaying an unchanged original would not export edits. An incremental lossless representation supports both future editing and safe preservation.
 
 ## Risks / Trade-offs

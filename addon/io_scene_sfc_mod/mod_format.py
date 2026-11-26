@@ -207,6 +207,20 @@ def recalculate_normals(mesh):
             corner['raw'] = bytes(raw)
 
 
+def update_lod_distances(data, old_count=None, new_count=None, distances=None):
+    """Preserve source distances and initialize new, unused entries."""
+    result = bytearray(data)
+    values = list(struct.unpack_from('<5f', result, 24))
+    if distances is not None:
+        values = list(distances)
+    elif old_count is not None and new_count is not None:
+        for index in range(max(1, old_count), min(new_count, 5)):
+            if values[index] == 0:
+                values[index] = max(index * 100., values[index - 1] + 100.)
+    struct.pack_into('<5f', result, 24, *values)
+    return bytes(result)
+
+
 def rewrite_geometry(data, meshes):
     """Replace ordered geometry payloads while retaining all other source bytes."""
     chunks = inspect(data)
@@ -228,6 +242,7 @@ def rewrite_geometry(data, meshes):
                     for p, q in zip(mesh['polygons'], original['polygons']))):
             recalculate_normals(mesh)
         payloads.append(write_geometry(mesh))
+    data = update_lod_distances(data, len(source_chunks), len(meshes))
     body = bytearray(data[8:44])
     if len(meshes) != len(source_chunks):
         struct.pack_into('<I', body, 8, len(meshes))

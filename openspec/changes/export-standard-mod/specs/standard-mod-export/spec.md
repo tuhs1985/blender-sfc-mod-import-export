@@ -13,6 +13,10 @@ The exporter SHALL write all supported LODs, named points, material assignments 
 - **WHEN** a supported three-LOD model is exported
 - **THEN** the file contains three ordered LODs and their assigned materials
 
+#### Scenario: LOD distances
+- **WHEN** a standard model is exported
+- **THEN** imported distances are retained, newly needed empty entries use the 100-unit baseline, and a dialog offers optional distance editing disabled by default
+
 #### Scenario: One mesh without an LOD name
 - **WHEN** a model collection contains one eligible mesh without an LOD-style name
 - **THEN** it exports as a single LOD without requiring a rename

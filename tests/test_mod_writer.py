@@ -14,6 +14,14 @@ def chunk(tag, body):
 
 
 class WriterTests(unittest.TestCase):
+    def test_lod_distances_preserve_source_and_fill_new_entries(self):
+        data = b'MDLS' + struct.pack('<I', 36) + struct.pack('<IfI6f', 512, 1., 3, 5., 0., 180., 350., 0., 0.)
+        extended = fmt.update_lod_distances(data, old_count=3, new_count=5)
+        self.assertEqual(struct.unpack_from('<5f', extended, 24), (0., 180., 350., 450., 550.))
+        self.assertEqual(fmt.update_lod_distances(data, old_count=3, new_count=3), data)
+        changed = fmt.update_lod_distances(data, distances=(0., 50., 150., 250., 450.))
+        self.assertEqual(struct.unpack_from('<5f', changed, 24), (0., 50., 150., 250., 450.))
+
     def test_break_pieces_keep_ids_and_separate_vertex_indices(self):
         first = fmt.inspect_geometry(self.geometry())
         second = fmt.inspect_geometry(self.geometry())
