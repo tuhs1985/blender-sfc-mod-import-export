@@ -10,7 +10,7 @@ These observations support, but do not by themselves prove, that offset 20 is to
 
 An OP installation scan found 364 readable MOD headers, including eight standard models with four LODs. FCA uses 0, 180, 350, while other examples use 0, 1800, 5000 or four populated entries. R4 decompilation calls its dialog when more than one model object is found; its readme describes distance settings. D4v1ks' exporter initializes the five entries to 0, 100, 200, 300, 400. The Blender exporter retains imported values, initializes newly needed zero entries with that 100-unit baseline (extending the preceding distance when necessary), and allows optional editing in the export dialog. Runtime effects have not yet been independently confirmed.
 
-On 2026-11-25, the user confirmed that the LOD distance option works and was satisfactory. The confirmation did not specify a test of actual distance-triggered switching in MOD Viewer or OP, which remains open.
+On 2026-11-25, the user confirmed that the LOD distance option works and was satisfactory, then accepted the MOD Viewer LOD checkout as sufficient to close the remaining LOD checks. The user does not require further edge-case testing. Individual distance-triggered switching cases were not independently verified.
 
 Closeout check on 2026-11-25: original installed OP FCA and KCA standard and break files all reproduced byte-for-byte through the geometry round-trip writer; the standard files each had three MOD0 chunks, the break files one each. This verifies serialization of those local files, not renderer or game behavior. The synthetic Python and Blender background suites and standard export OpenSpec validation also passed.
 

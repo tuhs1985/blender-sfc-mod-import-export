@@ -24,7 +24,7 @@
 - [x] 4.1e Do not warn about routine vertex and topology edits; retain actionable export warnings.
 - [x] 4.1f Implement authored LOD, point and diffuse/illumination export; verify synthetic Blender export and re-import.
 - [x] 4.1g Prevent protected-folder temporary-file creation from retrying permission errors indefinitely; report the destination error and test in Blender.
-- [ ] 4.1c Validate newly authored multi-LOD models in MOD Viewer or OP. The user has already confirmed points and diffuse/illumination in game; those do not need a separate viewer check.
+- [x] 4.1c Close the multi-LOD viewer checkout based on the user's acceptance of the MOD Viewer result. The user also confirmed points and diffuse/illumination in game; separate edge-case tests are not required for closeout.
 - [ ] 4.2 Encode experimental mesh and other edits that are currently rejected, preserving the user's changes and reporting any that cannot yet be represented. Validate each edit with controlled tests; avoid silently writing the original data in place of edits.
 - [ ] 4.3 When the exporter is finished, prepare a sample for the user's optional OP test; record actual viewer and game results separately.
 
@@ -36,4 +36,4 @@
 - [x] 5.4 Support standard-model transforms, evaluated geometry, and models without UV layers without judging mesh quality; allow the full 65,536-vertex index range.
 - [ ] 5.5 Investigate non-ASCII string encoding; do not assume a specific game code page.
 - [x] 5.6 Preserve imported LOD distances, initialize new distances using D4v1ks' 100-unit baseline, and offer an opt-in export dialog for editing them; verify serialization and Blender integration.
-- [ ] 5.7 Verify edited and newly initialized LOD transition behavior in MOD Viewer or OP.
+- [x] 5.7 Close LOD transition checks based on the user's acceptance of the MOD Viewer checkout. Individual distance-triggered switching edge cases were not independently verified.
