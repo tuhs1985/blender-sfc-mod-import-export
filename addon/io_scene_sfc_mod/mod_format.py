@@ -151,26 +151,107 @@ def group_break_polygons(mesh):
     return groups
 
 
+def combine_break_geometry(pieces):
+    """Pack distinct piece meshes into one geometry using MOD corner IDs."""
+    vertices, polygons, seen = [], [], set()
+    for piece_id, mesh in pieces:
+        if not 0 <= piece_id <= 65535 or piece_id in seen:
+            raise ValueError('Break piece IDs must be unique 16-bit numbers')
+        seen.add(piece_id)
+        if mesh['unknown']:
+            raise ValueError('Cannot combine unknown nested geometry chunks')
+        offset = len(vertices)
+        vertices.extend(mesh['vertices'])
+        if len(vertices) > 65536:
+            raise ValueError('Break model exceeds 16-bit vertex index limit')
+        for polygon in mesh['polygons']:
+            corners = []
+            for corner in polygon['corners']:
+                index = corner['index'] + offset
+                raw = bytearray(corner['raw'])
+                struct.pack_into('<HH', raw, 0, index, piece_id)
+                corners.append({**corner, 'index': index, 'raw': bytes(raw)})
+            polygons.append({**polygon, 'corners': corners})
+    return {'vertices': vertices, 'polygons': polygons, 'unknown': []}
+
+
+def recalculate_normals(mesh):
+    """Use the old exporter's per-material, shared-vertex averaging approach."""
+    totals = {}
+    face_normals = []
+    for polygon in mesh['polygons']:
+        corners = polygon['corners']
+        if len(corners) != 3:
+            raise ValueError('Normal recalculation requires triangles')
+        a, b, c = (mesh['vertices'][corner['index']] for corner in corners)
+        u = tuple(b[i] - a[i] for i in range(3))
+        v = tuple(c[i] - a[i] for i in range(3))
+        cross = (u[2]*v[1] - u[1]*v[2], u[0]*v[2] - u[2]*v[0], u[1]*v[0] - u[0]*v[1])
+        length = math.sqrt(sum(x*x for x in cross))
+        normal = tuple(x / length for x in cross) if length else (0.0, 0.0, 0.0)
+        face_normals.append(normal)
+        for corner in corners:
+            key = (polygon['material'], corner['index'])
+            values = totals.setdefault(key, [0.0, 0.0, 0.0, 0])
+            for i in range(3):
+                values[i] += normal[i]
+            values[3] += 1
+    for polygon, normal in zip(mesh['polygons'], face_normals):
+        header = bytearray(polygon['raw_header'])
+        struct.pack_into('<3f', header, 8, *normal)
+        polygon['raw_header'] = bytes(header)
+        for corner in polygon['corners']:
+            values = totals[(polygon['material'], corner['index'])]
+            raw = bytearray(corner['raw'])
+            struct.pack_into('<3f', raw, 4, *(x / values[3] for x in values[:3]))
+            corner['raw'] = bytes(raw)
+
+
 def rewrite_geometry(data, meshes):
     """Replace ordered geometry payloads while retaining all other source bytes."""
     chunks = inspect(data)
-    if len(meshes) != sum(tag == b'MOD0' for tag, _, _ in chunks):
-        raise ValueError('Geometry chunk count mismatch')
-    mesh_iter = iter(meshes)
+    source_chunks = [(offset, size) for tag, offset, size in chunks if tag == b'MOD0']
+    if not meshes:
+        raise ValueError('A standard model needs at least one geometry mesh')
+    if len(meshes) != len(source_chunks) and any('_source_index' not in mesh for mesh in meshes):
+        raise ValueError('Geometry size changed without source mapping')
+    originals = [inspect_geometry(data[o + 8:o + 8 + n]) for o, n in source_chunks]
+    payloads = []
+    positions_changed = len(meshes) != len(originals)
+    for index, mesh in enumerate(meshes):
+        source_index = mesh.get('_source_index', index)
+        original = originals[source_index] if source_index is not None else None
+        changed_vertices = original is None or mesh['vertices'] != original['vertices']
+        positions_changed = positions_changed or changed_vertices
+        if (changed_vertices or len(mesh['polygons']) != len(original['polygons']) or
+                any([c['index'] for c in p['corners']] != [c['index'] for c in q['corners']]
+                    for p, q in zip(mesh['polygons'], original['polygons']))):
+            recalculate_normals(mesh)
+        payloads.append(write_geometry(mesh))
     body = bytearray(data[8:44])
+    if len(meshes) != len(source_chunks):
+        struct.pack_into('<I', body, 8, len(meshes))
+    if positions_changed:
+        radius = max((math.sqrt(sum(v * v for v in vertex)) for mesh in meshes for vertex in mesh['vertices']), default=0.0)
+        struct.pack_into('<f', body, 4, radius)
+    output_index = 0
+    source_index = 0
     for tag, offset, size in chunks:
         end = offset + 8 + size
         aligned_end = (end + 3) & ~3
         if tag == b'MOD0':
-            mesh = next(mesh_iter)
-            original_mesh = inspect_geometry(data[offset + 8:end])
-            if mesh['vertices'] != original_mesh['vertices']:
-                raise ValueError('Vertex edits are not supported until normal handling is verified')
-            payload = write_geometry(mesh)
-            if len(payload) != size:
-                raise ValueError('Geometry size changed; unsupported topology edit')
-            body.extend(tag + struct.pack('<I', len(payload)) + payload)
-            body.extend(data[end:aligned_end])
+            if output_index < len(payloads):
+                payload = payloads[output_index]
+                if len(payload) == size:
+                    body.extend(tag + struct.pack('<I', len(payload)) + payload)
+                    body.extend(data[end:aligned_end])
+                else:
+                    body.extend(write_chunk(tag, payload))
+                output_index += 1
+            source_index += 1
+            if source_index == len(source_chunks):
+                for payload in payloads[output_index:]:
+                    body.extend(write_chunk(b'MOD0', payload))
         else:
             body.extend(data[offset:aligned_end])
     return b'MDLS' + struct.pack('<I', len(body)) + body

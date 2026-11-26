@@ -7,9 +7,9 @@ The importer enables editing, but the project needs a way to write standard MOD 
 ## What Changes
 
 - Build a bounded binary writer and validate against original standard models.
-- Add a Blender export workflow preserving LODs, materials, texture references and named points.
-- Refuse unsupported edits rather than silently discard data; do not enforce a texture format.
-- Verify round trips with synthetic and local fixtures before in-game testing.
+- Export newly authored and imported Blender models, including LODs, materials, texture references and named points.
+- Export the artist's geometry, including open meshes and topology edits, without judging its quality. Make any data that cannot yet be represented clear; do not enforce a texture format.
+- Verify controlled changes using synthetic and local fixtures and MOD Viewer during development. The user may run a sample in OP after the exporter is finished; record viewer and game results separately.
 
 ## Capabilities
 

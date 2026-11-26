@@ -14,6 +14,15 @@ def chunk(tag, body):
 
 
 class WriterTests(unittest.TestCase):
+    def test_break_pieces_keep_ids_and_separate_vertex_indices(self):
+        first = fmt.inspect_geometry(self.geometry())
+        second = fmt.inspect_geometry(self.geometry())
+        combined = fmt.combine_break_geometry([(0, first), (4, second)])
+        parsed = fmt.inspect_geometry(fmt.write_geometry(combined))
+        groups = fmt.group_break_polygons(parsed)
+        self.assertEqual(sorted(groups), [0, 4])
+        self.assertEqual([c['index'] for c in groups[4][0]['corners']], [3, 4, 5])
+
     def test_detects_distinct_images_that_share_local_stem(self):
         conflicts = fmt.texture_stem_collisions([r'C:\one\Hull.png', r'C:\two\hull.bmp', r'C:\ONE\HULL.PNG', r'C:\two\other.png'])
         self.assertEqual(set(conflicts), {'hull'})
@@ -65,14 +74,21 @@ class WriterTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             fmt.rewrite_geometry(data, [])
 
-    def test_rejects_vertex_edits_until_normal_handling_is_verified(self):
+    def test_writes_vertex_edits_and_recalculates_normals(self):
         geometry = self.geometry()
         body = bytes(36) + chunk(b'MOD0', geometry)
         data = b'MDLS' + struct.pack('<I', len(body)) + body
         mesh = fmt.inspect_geometry(geometry)
-        mesh['vertices'][0] = (2., 0., 0.)
-        with self.assertRaises(ValueError):
-            fmt.rewrite_geometry(data, [mesh])
+        mesh['vertices'][2] = (0., 1., 1.)
+        output = fmt.rewrite_geometry(data, [mesh])
+        self.assertAlmostEqual(struct.unpack_from('<f', output, 12)[0], 2 ** 0.5, places=6)
+        result = fmt.inspect_geometry(output[52:])
+        self.assertEqual(result['vertices'][2], (0., 1., 1.))
+        normal = struct.unpack_from('<3f', result['polygons'][0]['raw_header'], 8)
+        self.assertAlmostEqual(normal[1], 2 ** -0.5, places=6)
+        self.assertAlmostEqual(normal[2], -(2 ** -0.5), places=6)
+        for corner in result['polygons'][0]['corners']:
+            self.assertEqual(struct.unpack_from('<3f', corner['raw'], 4), normal)
 
     def test_rejects_unserializable_nested_chunks(self):
         mesh = fmt.inspect_geometry(self.geometry())

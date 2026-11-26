@@ -6,20 +6,22 @@ The importer retains raw polygon records and material records, but does not yet 
 
 ## Goals / Non-Goals
 
-**Goals:** Develop a verified writer in stages, preserve unknown data and make unsupported modifications explicit.
+**Goals:** Export standard models created in Blender or imported from MOD, preserve unknown source data where possible, and make data that cannot yet be represented explicit.
 
-**Non-Goals:** Break-model export, smoothing boundary modification, or claiming OP compatibility before game testing.
+**Non-Goals:** Break-model export and smoothing boundary modification in this change. Treat viewer confirmation and actual OP testing as distinct evidence.
 
 ## Decisions
 
-Start with pure Python bounded chunk and geometry serialization backed by synthetic and original-file round-trip checks, before creating Blender export controls. Retain original bytes for fields whose meaning is not known, including header and opaque chunk payloads; only encode fields with verified interpretations. Track transforms, LOD ordering, point names and material references through explicit source metadata. Perform validation before writing, use a temporary file plus atomic replacement, and never silently overwrite unsupported data. Do not impose image-format requirements.
+Use bounded chunk and geometry serialization backed by synthetic and original-file round-trip checks. Retain original bytes for fields whose meaning is not known when round-tripping; for new models use documented evidence-based defaults and identify unverified interpretations. Source metadata must not be required for new models. Encode edited geometry including open meshes, without assessing whether an artist's model is acceptable. Report data that cannot be encoded rather than silently claiming it was exported. Use a temporary file plus atomic replacement. Do not impose image-format requirements.
 
-For Blender authoring, the user proposes LOD objects named `fca_1`, `fca_2`, etc., exported together as `fca.mod`. Select an explicit model collection for export; a single eligible mesh without an LOD-style name is a valid one-LOD model. Reject ambiguous multi-mesh ordering and surface conflicts between names and retained IDs. Do not rename artist materials or texture images. The original FCA and KCA files examined store texture stems without directories or extensions, and the R4 exporter strips the path and extension before writing. Derive those local stems from selected image filenames; warn if an assigned image is outside the chosen save directory because OP may not find it. Allow export after the warning; do not silently copy, move, rename or convert images, or enforce a format. Preserve unusual original references during unchanged round trips rather than silently rewriting them.
+For Blender authoring, use LOD objects named `fca_1`, `fca_2`, etc., exported together as `fca.mod`; a single eligible mesh without an LOD-style name is a valid one-LOD model. Retained IDs identify imported LODs even if objects are renamed. Surface genuinely ambiguous ordering without treating ordinary mesh edits as errors. Do not rename artist materials or texture images. The original FCA and KCA files examined store texture stems without directories or extensions, and the R4 exporter strips the path and extension before writing. Derive those local stems from selected image filenames; warn if an assigned image is outside the chosen save directory because OP may not find it. Allow export after the warning; do not silently copy, move, rename or convert images, or enforce a format. Preserve unusual original references during unchanged round trips rather than silently rewriting them. Routine vertex and topology changes do not warrant warnings; reserve them for actionable problems.
+
+Use five standard-model LODs as the user's working maximum assumption until further evidence, not as a proven OP limit or a new hard rejection. Break-piece counts are separate and have no assumed maximum; do not apply the LOD assumption to them.
 
 Alternatives considered: writing a file directly from scratch would require guessing unknown header fields; replaying an unchanged original would not export edits. An incremental lossless representation supports both future editing and safe preservation.
 
 ## Risks / Trade-offs
 
-- [Normals, UV conventions and material flags remain partly unverified] → Preserve source fields and reject edits that cannot be safely encoded.
+- [Normals, UV conventions and material flags remain partly unverified] → Preserve source fields where possible, document assumptions, and test controlled changes in MOD Viewer.
 - [Original importer lacks necessary metadata] → Extend import metadata before adding the export operator.
-- [Game compatibility is not proven by parsing] → Require independent OP testing after round-trip checks.
+- [Viewer and game behavior may differ] → The user accepts MOD Viewer checks during development; record their scope and defer an optional OP sample until the exporter is finished.
