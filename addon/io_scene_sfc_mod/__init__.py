@@ -1,7 +1,7 @@
 bl_info = {
     'name': 'Starfleet Command 1/2/OP/3 MOD Import/Export',
     'author': 'SFC MOD project',
-    'version': (0, 4, 0),
+    'version': (0, 4, 7),
     'blender': (4, 3, 0),
     'location': 'File > Import',
     'description': 'Import and conservatively export Starfleet Command MOD models (experimental)',
@@ -19,10 +19,24 @@ import zlib
 from pathlib import Path
 import bpy
 import bmesh
-from mathutils import Vector
-from bpy.props import BoolProperty, EnumProperty, StringProperty, FloatVectorProperty, FloatProperty
+from mathutils import Matrix, Vector
+from bpy.props import BoolProperty, EnumProperty, StringProperty, FloatVectorProperty, IntProperty
 from bpy_extras.io_utils import ImportHelper, ExportHelper
 from .mod_format import inspect, parse_model, group_break_polygons, combine_break_geometry, rewrite_geometry, rewrite_records, texture_stem_collisions, write_chunk, write_geometry, recalculate_normals, update_lod_distances
+
+
+def from_mod_coordinates(position):
+    x, y, z = position
+    return (-z, -x, y)
+
+
+def to_mod_coordinates(position):
+    x, y, z = position
+    return (-y, z, -x)
+
+
+def import_rotation():
+    return tuple(Matrix(((0., 0., -1.), (-1., 0., 0.), (0., 1., 0.))).to_euler())
 
 
 def shader_defaults(shader):
@@ -77,7 +91,80 @@ def mesh_has_faces(context, obj):
         evaluated.to_mesh_clear()
 
 
-def import_model(context, filepath):
+def point_group_kind(name):
+    """Classify the documented hardpoint and damage-point naming conventions."""
+    if re.fullmatch(r'hardpoint\d+', name, re.IGNORECASE):
+        return 'HardPoints'
+    if re.fullmatch(r'[a-f]\d+', name, re.IGNORECASE):
+        return 'DamagePoints'
+    return None
+
+
+def is_point_group(collection):
+    name = re.sub(r'\.\d{3}$', '', collection.name).casefold()
+    return name in ('hardpoints', 'damagepoints')
+
+
+def model_point_objects(collection):
+    """Find direct and grouped points once, preserving imported point order."""
+    objects = list(collection.objects)
+    for child in collection.children:
+        if is_point_group(child):
+            objects.extend(child.objects)
+    seen, points = set(), []
+    for obj in objects:
+        if obj.type == 'EMPTY' and obj.as_pointer() not in seen:
+            seen.add(obj.as_pointer())
+            points.append(obj)
+    return sorted(points, key=lambda obj: (0, int(obj['mod_point_index'])) if 'mod_point_index' in obj else (1, 0))
+
+
+def model_collection_for_object(context, obj):
+    collections = [c for c in obj.users_collection if c != context.scene.collection]
+    for collection in collections:
+        if is_point_group(collection):
+            parents = [c for c in [context.scene.collection, *bpy.data.collections]
+                       if collection.name in c.children]
+            if parents:
+                return parents[0]
+        else:
+            return collection
+    return context.scene.collection
+
+
+def apply_imported_normals(mesh, polygons, materials):
+    """Restore MOD corner-normal directions for Blender shading without welding."""
+    normals = [(0., 0., 0.)] * len(mesh.loops)
+    edge_sides = {}
+    for face, polygon in zip(mesh.polygons, polygons):
+        flags = materials[polygon['material']]['flags']
+        face.use_smooth = not (flags & 0x04 and not flags & 0x02)
+        loops = list(face.loop_indices)
+        for loop_index, corner_index in zip(loops, (1, 0, 2)):
+            normal = struct.unpack_from('<3f', polygon['corners'][corner_index]['raw'], 4)
+            normals[loop_index] = normal if all(math.isfinite(value) for value in normal) else (0., 0., 0.)
+        if face.use_smooth:
+            for index, loop_index in enumerate(loops):
+                next_index = loops[(index + 1) % len(loops)]
+                loop, following = mesh.loops[loop_index], mesh.loops[next_index]
+                edge_sides.setdefault(loop.edge_index, []).append({loop.vertex_index: Vector(normals[loop_index]),
+                                                                   following.vertex_index: Vector(normals[next_index])})
+    for index, sides in edge_sides.items():
+        if len(sides) != 2:
+            continue
+        for vertex, first in sides[0].items():
+            second = sides[1].get(vertex)
+            if second is not None and first.length_squared > 1e-20 and second.length_squared > 1e-20:
+                if (first.normalized() - second.normalized()).length_squared > 1e-10:
+                    mesh.edges[index].use_edge_sharp = True
+                    break
+    if normals:
+        mesh.normals_split_custom_set(normals)
+        mesh['mod_imported_normals'] = True
+    mesh.update()
+
+
+def import_model(context, filepath, import_smoothing=True):
     path = Path(filepath)
     is_break = path.stem.casefold().endswith('_brk')
     source_bytes = path.read_bytes()
@@ -176,10 +263,15 @@ def import_model(context, filepath):
                 face.material_index = poly['material']
                 for loop, i in zip(face.loop_indices, (1, 0, 2)):
                     uv.data[loop].uv = poly['corners'][i]['uv']
+            if import_smoothing:
+                apply_imported_normals(mesh, source['polygons'], model['materials'])
+            else:
+                for face in mesh.polygons:
+                    face.use_smooth = False
             obj = bpy.data.objects.new(mesh.name, mesh)
             collection.objects.link(obj)
-            obj.rotation_euler.x = math.pi / 2
-            obj.location = (origin.x, -origin.z, origin.y)
+            obj.rotation_euler = import_rotation()
+            obj.location = from_mod_coordinates(origin)
             if is_break:
                 obj['mod_piece_id'] = number - 1
                 obj['mod_vertex_indices'] = used
@@ -189,11 +281,18 @@ def import_model(context, filepath):
             else:
                 obj['mod_lod_index'] = number - 1
                 obj.hide_set(number != 1)
+        point_groups = {}
         for point_index, point in enumerate(model['points']):
             obj = bpy.data.objects.new(point['name'], None)
-            collection.objects.link(obj)
-            x, y, z = point['position']
-            obj.location = (x, -z, y)
+            group_name = point_group_kind(point['name'])
+            if group_name:
+                if group_name not in point_groups:
+                    point_groups[group_name] = bpy.data.collections.new(group_name)
+                    collection.children.link(point_groups[group_name])
+                point_groups[group_name].objects.link(obj)
+            else:
+                collection.objects.link(obj)
+            obj.location = from_mod_coordinates(point['position'])
             obj.empty_display_type = 'SPHERE'
             obj.empty_display_size = 0.15
             obj['mod_name'] = point['name']
@@ -202,15 +301,17 @@ def import_model(context, filepath):
             obj['mod_position'] = point['position']
             obj['mod_string_offset'] = point['name_offset']
     except Exception:
-        for obj in list(collection.objects):
+        for obj in list(collection.all_objects):
             bpy.data.objects.remove(obj, do_unlink=True)
+        for child in list(collection.children):
+            bpy.data.collections.remove(child)
         bpy.data.collections.remove(collection)
         raise
     return warnings
 
 
-def prepare_standard_export(collection, destination, split_angle=None):
-    return prepare_imported_export(bpy.context, collection, destination, break_mode=False, split_angle=split_angle)
+def prepare_standard_export(collection, destination, split_angle=None, direct_normals=False):
+    return prepare_imported_export(bpy.context, collection, destination, break_mode=False, split_angle=split_angle, direct_normals=direct_normals)
 
 
 class IMPORT_OT_sfc_mod(bpy.types.Operator, ImportHelper):
@@ -218,10 +319,18 @@ class IMPORT_OT_sfc_mod(bpy.types.Operator, ImportHelper):
     bl_label = 'Import SFC 1/2/OP/3 MOD'
     filename_ext = '.mod'
     filter_glob: StringProperty(default='*.mod;*.MOD', options={'HIDDEN'})
+    import_smoothing: BoolProperty(
+        name='Import Smoothing',
+        description='Apply the model’s stored normals to Blender shading; turn off for flat faces',
+        default=True,
+    )
+
+    def draw(self, context):
+        self.layout.prop(self, 'import_smoothing')
 
     def execute(self, context):
         try:
-            warnings = import_model(context, self.filepath)
+            warnings = import_model(context, self.filepath, import_smoothing=self.import_smoothing)
         except Exception as exc:
             self.report({'ERROR'}, f'MOD import failed: {exc}')
             return {'CANCELLED'}
@@ -230,7 +339,7 @@ class IMPORT_OT_sfc_mod(bpy.types.Operator, ImportHelper):
         return {'FINISHED'}
 
 
-def prepare_new_mesh_export(context, obj, destination, break_mode=False, split_angle=None):
+def prepare_new_mesh_export(context, obj, destination, break_mode=False, split_angle=None, direct_normals=False):
     """Build a MOD from a selected authored mesh and its model collection."""
     match = re.fullmatch(r'(.+)_(\d+)', obj.name)
     candidates = [c for c in obj.users_collection if c != context.scene.collection]
@@ -258,7 +367,7 @@ def prepare_new_mesh_export(context, obj, destination, break_mode=False, split_a
             if candidate.type == 'MESH' and other and other.group(1).casefold() == prefix:
                 named.append((int(other.group(2)), candidate))
         meshes = [candidate for _, candidate in sorted(named, key=lambda item: item[0])]
-    points = [point for point in collection.objects if point.type == 'EMPTY']
+    points = model_point_objects(collection)
     strings = bytearray(b'\0')
     material_records = []
     material_lookup = {}
@@ -320,7 +429,7 @@ def prepare_new_mesh_export(context, obj, destination, break_mode=False, split_a
         return material_lookup[key]
 
     for mesh_obj in meshes:
-        geometry = authored_geometry(context, mesh_obj, material_index, split_angle=split_angle)
+        geometry = authored_geometry(context, mesh_obj, material_index, split_angle=split_angle, direct_normals=direct_normals)
         if break_mode:
             name_match = re.fullmatch(r'.+_brk_(\d+)', mesh_obj.name, re.IGNORECASE)
             piece_id = int(mesh_obj['mod_piece_id']) if 'mod_piece_id' in mesh_obj else int(name_match.group(1)) - 1
@@ -333,18 +442,18 @@ def prepare_new_mesh_export(context, obj, destination, break_mode=False, split_a
     point_data = bytearray()
     for point in points:
         p = point.matrix_world.translation
-        point_data.extend(struct.pack('<3fI', p.x, p.z, -p.y, string_offset(point.name)))
+        point_data.extend(struct.pack('<3fI', *to_mod_coordinates(p), string_offset(point.name)))
     header = struct.pack('<IfI6f', 0x200, radius, len(geometries), 5., 0., 100., 200., 300., 400.)
     body = header + write_chunk(b'STRS', strings) + write_chunk(b'PNTS', point_data) + write_chunk(b'MATS', b''.join(material_records))
     body += b''.join(write_chunk(b'MOD0', write_geometry(geometry)) for geometry in geometries)
     return b'MDLS' + struct.pack('<I', len(body)) + body, list(dict.fromkeys(warnings))
 
 
-def prepare_break_export(context, collection, destination, split_angle=None):
-    return prepare_imported_export(context, collection, destination, break_mode=True, split_angle=split_angle)
+def prepare_break_export(context, collection, destination, split_angle=None, direct_normals=False):
+    return prepare_imported_export(context, collection, destination, break_mode=True, split_angle=split_angle, direct_normals=direct_normals)
 
 
-def prepare_imported_export(context, collection, destination, break_mode, split_angle=None):
+def prepare_imported_export(context, collection, destination, break_mode, split_angle=None, direct_normals=False):
     """Write current imported geometry, materials, textures and point empties."""
     key = 'mod_piece_id' if break_mode else 'mod_lod_index'
     stem = Path(collection.get('mod_source_filename', '')).stem
@@ -478,24 +587,26 @@ def prepare_imported_export(context, collection, destination, break_mode, split_
                 return index
         raise ValueError('Mesh uses a material outside its slots')
     if break_mode:
-        geometries = [(number, authored_geometry(context, obj, material_index, split_angle=split_angle)) for number, obj, _ in numbered]
+        geometries = [(number, authored_geometry(context, obj, material_index, split_angle=split_angle, direct_normals=direct_normals)) for number, obj, _ in numbered]
         geometries = [combine_break_geometry(geometries)]
+        if direct_normals:
+            geometries[0]['_normals_supplied'] = True
     else:
         geometries = []
         for _, obj, source_index in numbered:
             mesh = obj.data
             if len(mesh.vertices) > 65536:
                 raise ValueError('Mesh exceeds the MOD vertex index limit')
-            if split_angle != 'BLENDER' and (mesh.has_custom_normals or any(edge.use_edge_sharp for edge in mesh.edges) or any(face.use_smooth for face in mesh.polygons)):
+            if split_angle != 'BLENDER' and not direct_normals and not mesh.get('mod_imported_normals') and (mesh.has_custom_normals or any(edge.use_edge_sharp for edge in mesh.edges) or any(face.use_smooth for face in mesh.polygons)):
                 warnings.append(f'Blender smoothing settings on {obj.name} are not encoded')
-            expected_rotation = (Vector((math.pi / 2, 0, 0)).x, 0.0, 0.0)
-            evaluated = (split_angle is not None or source_index is None or source_index >= len(model['meshes']) or obj.parent or obj.constraints or obj.modifiers or mesh.shape_keys or
+            expected_rotation = import_rotation()
+            evaluated = (direct_normals or split_angle is not None or source_index is None or source_index >= len(model['meshes']) or obj.parent or obj.constraints or obj.modifiers or mesh.shape_keys or
                     obj.rotation_mode != 'XYZ' or tuple(obj.location) != (0.0, 0.0, 0.0) or
                     tuple(obj.rotation_euler) != expected_rotation or tuple(obj.scale) != (1.0, 1.0, 1.0) or
                     tuple(obj.delta_location) != (0.0, 0.0, 0.0) or tuple(obj.delta_rotation_euler) != (0.0, 0.0, 0.0) or
                     tuple(obj.delta_scale) != (1.0, 1.0, 1.0))
             if evaluated:
-                geometry = authored_geometry(context, obj, material_index, split_angle=split_angle)
+                geometry = authored_geometry(context, obj, material_index, split_angle=split_angle, direct_normals=direct_normals)
                 geometry['_source_index'] = source_index if source_index is not None and source_index < len(model['meshes']) else None
                 geometries.append(geometry)
                 continue
@@ -526,13 +637,13 @@ def prepare_imported_export(context, collection, destination, break_mode, split_
                     for loop, corner_index in zip(face.loop_indices, (1, 0, 2)):
                         polygon['corners'][corner_index]['uv'] = tuple(mesh.uv_layers.active.data[loop].uv) if mesh.uv_layers.active else (0., 0.)
     point_data = bytearray()
-    for obj in (obj for obj in collection.objects if obj.type == 'EMPTY'):
+    for obj in model_point_objects(collection):
         position = obj.matrix_world.translation
         name = obj.get('mod_name', obj.name) if obj.name == obj.get('mod_initial_blender_name') else obj.name
         offset = obj.get('mod_string_offset') if name == obj.get('mod_name') else None
         if not string_matches(offset, name):
             offset = add_string(name)
-        point_data.extend(struct.pack('<3fI', position.x, position.z, -position.y, offset))
+        point_data.extend(struct.pack('<3fI', *to_mod_coordinates(position), offset))
     geometry_data = rewrite_geometry(source, geometries)
     replacements = {b'STRS': bytes(strings), b'PNTS': bytes(point_data), b'MATS': bytes(material_data)}
     body = bytearray(geometry_data[8:44])
@@ -553,7 +664,7 @@ def prepare_imported_export(context, collection, destination, break_mode, split_
     return b'MDLS' + struct.pack('<I', len(body)) + body, list(dict.fromkeys(warnings))
 
 
-def authored_geometry(context, obj, material_index, split_angle=None):
+def authored_geometry(context, obj, material_index, split_angle=None, direct_normals=False):
     """Convert one evaluated Blender mesh to an SFC geometry record."""
     evaluated = obj.evaluated_get(context.evaluated_depsgraph_get())
     mesh = evaluated.to_mesh()
@@ -600,21 +711,41 @@ def authored_geometry(context, obj, material_index, split_angle=None):
         vertices = []
         for vertex in mesh.vertices:
             p = evaluated.matrix_world @ vertex.co
-            vertices.append((p.x, p.z, -p.y))
+            vertices.append(to_mod_coordinates(p))
         material_indices = [material_index(mat) for mat in (list(mesh.materials) or [None])]
         polygons = []
+        normal_matrix = evaluated.matrix_world.to_3x3().inverted_safe().transposed() if direct_normals else None
+        corner_normals = mesh.corner_normals if direct_normals else None
+        supplied_normals = []
+        mirrored = direct_normals and evaluated.matrix_world.to_3x3().determinant() < 0.0
         uv = mesh.uv_layers.active
         for tri in mesh.loop_triangles:
             corners = []
-            for loop_id in (tri.loops[1], tri.loops[0], tri.loops[2]):
+            face_normals = []
+            ordered_loops = (tri.loops[0], tri.loops[1], tri.loops[2]) if mirrored else (tri.loops[1], tri.loops[0], tri.loops[2])
+            for loop_id in ordered_loops:
                 index = mesh.loops[loop_id].vertex_index
                 coords = tuple(uv.data[loop_id].uv) if uv else (0., 0.)
                 raw = struct.pack('<I3f2fI', index, 0., 0., 0., *coords, 0)
                 corners.append({'index': index, 'uv': coords, 'raw': raw})
+                if direct_normals:
+                    normal = normal_matrix @ corner_normals[loop_id].vector
+                    if normal.length_squared:
+                        normal.normalize()
+                    face_normals.append(to_mod_coordinates(normal))
             index = material_indices[tri.material_index]
             polygons.append({'material': index, 'raw_header': struct.pack('<II3f', 3, index, 0., 0., 0.), 'corners': corners})
+            if direct_normals:
+                supplied_normals.append(face_normals)
         geometry = {'vertices': vertices, 'polygons': polygons, 'unknown': []}
         recalculate_normals(geometry)
+        if direct_normals:
+            for polygon, normals in zip(polygons, supplied_normals):
+                for corner, normal in zip(polygon['corners'], normals):
+                    raw = bytearray(corner['raw'])
+                    struct.pack_into('<3f', raw, 4, *normal)
+                    corner['raw'] = bytes(raw)
+            geometry['_normals_supplied'] = True
         return geometry
     finally:
         evaluated.to_mesh_clear()
@@ -651,8 +782,7 @@ def find_export_models(context, active):
     """Find standard and break objects belonging to the selected ship."""
     if not active:
         raise ValueError('Select a model object to export')
-    collections = [c for c in active.users_collection if c != context.scene.collection]
-    collection = collections[0] if collections else context.scene.collection
+    collection = model_collection_for_object(context, active)
     source_name = collection.get('mod_source_filename', '')
     choices = {}
     if source_name:
@@ -681,6 +811,16 @@ def find_export_models(context, active):
                     raise ValueError(f'Multiple imported {kind} collections match {base}')
                 choices[kind] = (candidate, objects[0])
         return choices
+    if active.type == 'EMPTY':
+        meshes = [obj for obj in collection.objects if obj.type == 'MESH']
+        bases = {m.group(1).casefold() for obj in meshes
+                 if (m := re.fullmatch(r'(.+?)(?:_brk)?_\d+', obj.name, re.IGNORECASE))}
+        if len(bases) == 1:
+            active = next(obj for obj in meshes if re.fullmatch(r'(.+?)(?:_brk)?_\d+', obj.name, re.IGNORECASE))
+        elif len(meshes) == 1:
+            active = meshes[0]
+        else:
+            raise ValueError('Select a model mesh to identify which model to export')
     match = re.fullmatch(r'(.+?)(?:_brk)?_\d+', active.name, re.IGNORECASE)
     base = match.group(1).casefold() if match else active.name.casefold()
     for obj in collection.objects:
@@ -738,7 +878,7 @@ def write_export_outputs(outputs, snapshots):
             temp_path.unlink(missing_ok=True)
 
 
-def prepare_selected_outputs(context, active, paths, include_empty_break_warnings=False, split_angle=None):
+def prepare_selected_outputs(context, active, paths, include_empty_break_warnings=False, split_angle=None, direct_normals=False):
     choices = find_export_models(context, active)
     outputs, warnings = {}, []
     if include_empty_break_warnings and 'break' not in choices:
@@ -748,10 +888,10 @@ def prepare_selected_outputs(context, active, paths, include_empty_break_warning
             raise ValueError(f'The selected model no longer contains a {kind} model')
         collection, obj = choices[kind]
         if collection.get('mod_source_zlib_base64'):
-            data, notes = (prepare_break_export(context, collection, path, split_angle=split_angle) if kind == 'break'
-                           else prepare_standard_export(collection, path, split_angle=split_angle))
+            data, notes = (prepare_break_export(context, collection, path, split_angle=split_angle, direct_normals=direct_normals) if kind == 'break'
+                           else prepare_standard_export(collection, path, split_angle=split_angle, direct_normals=direct_normals))
         else:
-            data, notes = prepare_new_mesh_export(context, obj, path, break_mode=(kind == 'break'), split_angle=split_angle)
+            data, notes = prepare_new_mesh_export(context, obj, path, break_mode=(kind == 'break'), split_angle=split_angle, direct_normals=direct_normals)
         outputs[path] = data
         warnings.extend(notes)
     return outputs, list(dict.fromkeys(warnings))
@@ -773,34 +913,30 @@ def report_export_warnings(operator, warnings):
         operator.report({'WARNING'}, message)
 
 
+def initial_lod_settings(context, active):
+    """Read the distances that would be exported before opening the file browser."""
+    choices = find_export_models(context, active)
+    if 'standard' not in choices:
+        return 0, (0., 100., 200., 300., 400.)
+    preview_path = Path(bpy.path.abspath('//')) / '__sfc_lod_preview__.mod'
+    outputs, _ = prepare_selected_outputs(context, active, {'standard': preview_path})
+    standard = outputs[preview_path]
+    return struct.unpack_from('<I', standard, 16)[0], struct.unpack_from('<5f', standard, 24)
+
+
 class EXPORT_OT_sfc_mod_confirm(bpy.types.Operator):
     bl_idname = 'export_scene.sfc_mod_confirm'
-    bl_label = 'MOD Export Options'
+    bl_label = 'Confirm MOD Overwrite'
     payload: StringProperty(options={'HIDDEN'})
     overwrite_standard: BoolProperty(name='Overwrite standard model', default=True)
     overwrite_break: BoolProperty(name='Overwrite break model', default=True)
-    modify_distances: BoolProperty(name='Modify LOD distances', default=False)
-    distances: FloatVectorProperty(name='LOD distances', size=5, default=(0., 100., 200., 300., 400.))
-    smoothing_mode: EnumProperty(name='Smoothing', items=[('NONE', 'Keep Current Export', 'Do not split faces'),
-                                                         ('BLENDER', 'Use Blender Smoothing', 'Split where Blender smoothing changes'),
-                                                         ('ANGLE', 'Split by Angle', 'Split edges above an angle')], default='NONE')
-    smoothing_angle: FloatProperty(name='Split angle', subtype='ANGLE', default=math.radians(45), min=0, max=math.pi)
 
     def invoke(self, context, event):
         return context.window_manager.invoke_props_dialog(self, width=480)
 
     def draw(self, context):
         state = json.loads(self.payload)
-        self.layout.prop(self, 'smoothing_mode')
-        if self.smoothing_mode == 'ANGLE':
-            self.layout.prop(self, 'smoothing_angle')
-        if 'standard' in state['paths']:
-            self.layout.prop(self, 'modify_distances')
-            if self.modify_distances:
-                for index in range(1, min(state['lod_count'], 5)):
-                    self.layout.prop(self, 'distances', index=index, text=f'LOD {index + 1} distance')
-        if any(value is not None for value in state['snapshots'].values()):
-            self.layout.label(text='Select existing files to overwrite:')
+        self.layout.label(text='Select existing files to overwrite:')
         for kind, name in state['paths'].items():
             if state['snapshots'][name] is not None:
                 self.layout.prop(self, 'overwrite_' + kind, text='Overwrite ' + Path(name).name)
@@ -814,11 +950,13 @@ class EXPORT_OT_sfc_mod_confirm(bpy.types.Operator):
             if not paths:
                 self.report({'INFO'}, 'No files selected for export')
                 return {'CANCELLED'}
-            split_angle = 'BLENDER' if self.smoothing_mode == 'BLENDER' else self.smoothing_angle if self.smoothing_mode == 'ANGLE' else None
-            outputs, warnings = prepare_selected_outputs(context, active, paths, state.get('include_empty_break_warnings', False), split_angle=split_angle)
-            if self.modify_distances and 'standard' in paths:
+            smoothing = state.get('smoothing_mode', 'KEEP')
+            outputs, warnings = prepare_selected_outputs(context, active, paths, state.get('include_empty_break_warnings', False),
+                                                       split_angle='BLENDER' if smoothing == 'SPLIT' else None,
+                                                       direct_normals=smoothing == 'DIRECT')
+            if state.get('has_distances', False) and 'standard' in paths:
                 path = paths['standard']
-                outputs[path] = update_lod_distances(outputs[path], distances=self.distances)
+                outputs[path] = update_lod_distances(outputs[path], distances=state['distances'])
             write_export_outputs(outputs, state['snapshots'])
             report_export_warnings(self, warnings)
             return {'FINISHED'}
@@ -834,13 +972,35 @@ class EXPORT_OT_sfc_mod(bpy.types.Operator, ExportHelper):
     filter_glob: StringProperty(default='*.mod', options={'HIDDEN'})
     check_existing: BoolProperty(default=False, options={'HIDDEN'})
     output_mode: EnumProperty(name='Output', items=[('AUTO', 'Auto', ''), ('STANDARD', 'Standard Model Only', ''), ('BREAK', 'Break Model Only', '')], default='AUTO')
+    smoothing_mode: EnumProperty(name='Smoothing', items=[('KEEP', 'Keep Current Export', 'Keep existing export behavior'),
+                                                         ('DIRECT', 'Direct Corner Normals', 'Export Blender corner normals without splitting vertices'),
+                                                         ('SPLIT', 'Split Smoothing Boundaries', 'Split vertices at Blender shading boundaries')], default='KEEP')
+    distances: FloatVectorProperty(name='LOD distances', size=5, default=(0., 100., 200., 300., 400.))
+    lod_count: IntProperty(default=1, options={'HIDDEN'})
+
+    def invoke(self, context, event):
+        try:
+            self.lod_count, self.distances = initial_lod_settings(context, context.active_object)
+        except Exception:
+            # Keep the file browser available; execute reports any export error.
+            pass
+        return super().invoke(context, event)
 
     def draw(self, context):
         self.layout.label(text='Choose what to export:')
         self.layout.prop(self, 'output_mode')
-        self.layout.label(text='Auto: both, if available')
-        self.layout.label(text='Standard: ship and LODs')
-        self.layout.label(text='Break: debris pieces')
+        self.layout.label(text='- Auto: both, if available')
+        self.layout.label(text='- Standard: ship and LODs')
+        self.layout.label(text='- Break: debris pieces')
+        self.layout.prop(self, 'smoothing_mode')
+        self.layout.label(text='- Current: keep existing export')
+        self.layout.label(text='- Direct: use Blender normals')
+        self.layout.label(text='- Split: detach shading edges')
+        if self.output_mode != 'BREAK':
+            if self.lod_count > 1:
+                self.layout.label(text='LOD switching distances:')
+                for index in range(1, min(self.lod_count, 5)):
+                    self.layout.prop(self, 'distances', index=index, text=f'LOD {index + 1} distance')
 
     def execute(self, context):
         try:
@@ -851,17 +1011,18 @@ class EXPORT_OT_sfc_mod(bpy.types.Operator, ExportHelper):
                 return {'CANCELLED'}
             paths = output_paths(self.filepath, self.output_mode, 'standard' in choices, 'break' in choices)
             snapshots = {str(path): destination_snapshot(path) for path in paths.values()}
-            if not bpy.app.background or any(snapshot is not None for snapshot in snapshots.values()):
+            if any(snapshot is not None for snapshot in snapshots.values()):
                 if bpy.app.background:
                     raise ValueError('Overwrite confirmation requires an interactive Blender session')
-                preview, _ = prepare_selected_outputs(context, active, paths, self.output_mode != 'STANDARD')
-                standard = preview.get(paths.get('standard'))
-                lod_count = struct.unpack_from('<I', standard, 16)[0] if standard else 0
-                distances = struct.unpack_from('<5f', standard, 24) if standard else (0., 100., 200., 300., 400.)
-                payload = json.dumps({'active': active.name, 'paths': {k: str(v) for k, v in paths.items()}, 'snapshots': snapshots, 'include_empty_break_warnings': self.output_mode != 'STANDARD', 'lod_count': lod_count})
-                result = bpy.ops.export_scene.sfc_mod_confirm('INVOKE_DEFAULT', payload=payload, distances=distances)
+                payload = json.dumps({'active': active.name, 'paths': {k: str(v) for k, v in paths.items()}, 'snapshots': snapshots, 'include_empty_break_warnings': self.output_mode != 'STANDARD', 'smoothing_mode': self.smoothing_mode, 'has_distances': self.properties.is_property_set('distances'), 'distances': list(self.distances)})
+                result = bpy.ops.export_scene.sfc_mod_confirm('INVOKE_DEFAULT', payload=payload)
                 return {'CANCELLED'} if 'CANCELLED' in result else {'FINISHED'}
-            outputs, warnings = prepare_selected_outputs(context, active, paths, self.output_mode != 'STANDARD')
+            outputs, warnings = prepare_selected_outputs(context, active, paths, self.output_mode != 'STANDARD',
+                                                        split_angle='BLENDER' if self.smoothing_mode == 'SPLIT' else None,
+                                                        direct_normals=self.smoothing_mode == 'DIRECT')
+            if self.properties.is_property_set('distances') and 'standard' in paths:
+                path = paths['standard']
+                outputs[path] = update_lod_distances(outputs[path], distances=self.distances)
             write_export_outputs(outputs, snapshots)
             report_export_warnings(self, warnings)
             return {'FINISHED'}

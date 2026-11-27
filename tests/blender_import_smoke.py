@@ -1,5 +1,7 @@
 """Run with Blender's --background --factory-startup --python option."""
 import struct
+import math
+import json
 import base64
 import zlib
 import sys
@@ -14,6 +16,21 @@ sys.path.insert(0, str(repo / 'addon'))
 import io_scene_sfc_mod as addon
 assert addon.bl_info['name'] == 'Starfleet Command 1/2/OP/3 MOD Import/Export'
 addon.register()
+assert bpy.ops.import_scene.sfc_mod.get_rna_type().properties['import_smoothing'].default is True
+assert addon.to_mod_coordinates((1., 2., 3.)) == (-2., 3., -1.)
+assert addon.from_mod_coordinates((1., 2., 3.)) == (-3., -1., 2.)
+custom_mesh = bpy.data.meshes.new('custom_normal_mesh')
+custom_mesh.from_pydata([(0, 0, 0), (1, 0, 0), (0, 1, 0)], [], [(0, 1, 2)])
+custom_mesh.polygons[0].use_smooth = True
+custom_mesh.normals_split_custom_set([(2 ** -0.5, 2 ** -0.5, 0.)] * 3)
+custom_obj = bpy.data.objects.new('custom_normal_mesh', custom_mesh)
+bpy.context.scene.collection.objects.link(custom_obj)
+custom_obj.scale = (2., 1., 1.)
+bpy.context.view_layer.update()
+custom_result = addon.authored_geometry(bpy.context, custom_obj, lambda mat: 0, direct_normals=True)
+custom_normal = struct.unpack_from('<3f', custom_result['polygons'][0]['corners'][0]['raw'], 4)
+assert all(abs(a-b) < 1e-4 for a,b in zip(custom_normal, (-2 / math.sqrt(5), 0., -1 / math.sqrt(5))))
+bpy.data.objects.remove(custom_obj, do_unlink=True)
 empty_mesh = bpy.data.meshes.new('empty_standard_mesh')
 empty_obj = bpy.data.objects.new('empty_standard', empty_mesh)
 bpy.context.scene.collection.objects.link(empty_obj)
@@ -46,6 +63,7 @@ for loop in angle_mesh.loops:
 angle_obj = bpy.data.objects.new('angle_split_source', angle_mesh)
 bpy.context.scene.collection.objects.link(angle_obj)
 normal_geometry = addon.authored_geometry(bpy.context, angle_obj, lambda mat: 0)
+assert normal_geometry['vertices'][1] == (0., 0., -1.)
 split_geometry = addon.authored_geometry(bpy.context, angle_obj, lambda mat: 0, split_angle=0.7853981633974483)
 assert len(normal_geometry['vertices']) == 4
 assert len(split_geometry['vertices']) == 6
@@ -62,12 +80,27 @@ shared_edge.use_edge_sharp = True
 angle_mesh.update()
 sharp_geometry = addon.authored_geometry(bpy.context, angle_obj, lambda mat: 0, split_angle='BLENDER')
 assert len(sharp_geometry['vertices']) == 6
+direct_geometry = addon.authored_geometry(bpy.context, angle_obj, lambda mat: 0, direct_normals=True)
+assert len(direct_geometry['vertices']) == 4
+shared_normals = []
+for polygon in direct_geometry['polygons']:
+    shared_normals.append(next(struct.unpack_from('<3f', corner['raw'], 4) for corner in polygon['corners'] if corner['index'] == 0))
+assert sum((a-b)**2 for a,b in zip(*shared_normals)) > 0.5
 for face in angle_mesh.polygons:
     face.use_smooth = False
 shared_edge.use_edge_sharp = False
 angle_mesh.update()
 assert len(addon.authored_geometry(bpy.context, angle_obj, lambda mat: 0, split_angle='BLENDER')['vertices']) == 6
 assert len(angle_mesh.vertices) == 4
+angle_obj.scale = (-1., 1., 1.)
+bpy.context.view_layer.update()
+mirrored = addon.authored_geometry(bpy.context, angle_obj, lambda mat: 0, direct_normals=True)
+for polygon in mirrored['polygons']:
+    face_normal = struct.unpack_from('<3f', polygon['raw_header'], 8)
+    corner_normal = struct.unpack_from('<3f', polygon['corners'][0]['raw'], 4)
+    assert sum(a*b for a,b in zip(face_normal, corner_normal)) > 0.99
+angle_obj.scale = (1., 1., 1.)
+bpy.context.view_layer.update()
 split_collection = bpy.data.collections.new('Smoothing test ship')
 bpy.context.scene.collection.children.link(split_collection)
 split_collection.objects.link(angle_obj)
@@ -81,6 +114,53 @@ paths = {'standard': Path(tempfile.gettempdir()) / 'shadertest.mod', 'break': Pa
 outputs, _ = addon.prepare_selected_outputs(bpy.context, angle_obj, paths, split_angle='BLENDER')
 assert len(addon.parse_model(outputs[paths['standard']])['meshes'][0]['vertices']) == 6
 assert len(addon.parse_model(outputs[paths['break']])['meshes'][0]['vertices']) == 6
+direct_outputs, _ = addon.prepare_selected_outputs(bpy.context, angle_obj, paths, direct_normals=True)
+for kind in ('standard', 'break'):
+    direct_mesh = addon.parse_model(direct_outputs[paths[kind]])['meshes'][0]
+    assert len(direct_mesh['vertices']) == 4
+    normals = [next(struct.unpack_from('<3f', c['raw'], 4) for c in p['corners'] if c['index'] == 0) for p in direct_mesh['polygons']]
+    assert sum((a-b)**2 for a,b in zip(*normals)) > 0.5
+with tempfile.TemporaryDirectory() as option_folder:
+    bpy.ops.object.select_all(action='DESELECT')
+    angle_obj.select_set(True)
+    bpy.context.view_layer.objects.active = angle_obj
+    option_path = Path(option_folder) / 'option.mod'
+    assert bpy.ops.export_scene.sfc_mod(filepath=str(option_path), smoothing_mode='DIRECT') == {'FINISHED'}
+    assert addon.initial_lod_settings(bpy.context, angle_obj) == (1, (0., 100., 200., 300., 400.))
+    for name in ('option.mod', 'option_brk.mod'):
+        option_mesh = addon.parse_model((Path(option_folder) / name).read_bytes())['meshes'][0]
+        assert len(option_mesh['vertices']) == 4
+        normals = [next(struct.unpack_from('<3f', c['raw'], 4) for c in p['corners'] if c['index'] == 0) for p in option_mesh['polygons']]
+        assert sum((a-b)**2 for a,b in zip(*normals)) > 0.5
+    state = {'active': angle_obj.name,
+             'paths': {'standard': str(option_path), 'break': str(Path(option_folder) / 'option_brk.mod')},
+             'snapshots': {str(p): addon.destination_snapshot(p) for p in (option_path, Path(option_folder) / 'option_brk.mod')},
+             'smoothing_mode': 'DIRECT', 'has_distances': True,
+             'distances': [0., 125., 260., 500., 900.]}
+    assert bpy.ops.export_scene.sfc_mod_confirm(payload=json.dumps(state)) == {'FINISHED'}
+    assert struct.unpack_from('<5f', option_path.read_bytes(), 24) == (0., 125., 260., 500., 900.)
+    fresh_path = Path(option_folder) / 'fresh.mod'
+    assert bpy.ops.export_scene.sfc_mod(filepath=str(fresh_path), smoothing_mode='DIRECT',
+                                       distances=(0., 111., 222., 333., 444.)) == {'FINISHED'}
+    assert struct.unpack_from('<5f', fresh_path.read_bytes(), 24) == (0., 111., 222., 333., 444.)
+    for name in ('option.mod', 'option_brk.mod'):
+        option_mesh = addon.parse_model((Path(option_folder) / name).read_bytes())['meshes'][0]
+        normals = [next(struct.unpack_from('<3f', c['raw'], 4) for c in p['corners'] if c['index'] == 0) for p in option_mesh['polygons']]
+        assert sum((a-b)**2 for a,b in zip(*normals)) > 0.5
+    before_option_import = set(bpy.data.objects)
+    addon.import_model(bpy.context, str(option_path))
+    imported_option = next(obj for obj in set(bpy.data.objects) - before_option_import if obj.type == 'MESH')
+    for face in imported_option.data.polygons:
+        face.use_smooth = True
+    next(edge for edge in imported_option.data.edges if set(edge.vertices) == {0, 1}).use_edge_sharp = True
+    imported_option.data.update()
+    bpy.context.view_layer.update()
+    imported_direct, _ = addon.prepare_standard_export(imported_option.users_collection[0], option_path, direct_normals=True)
+    imported_mesh = addon.parse_model(imported_direct)['meshes'][0]
+    assert len(imported_mesh['vertices']) == 4
+    normals = [next(struct.unpack_from('<3f', c['raw'], 4) for c in p['corners'] if c['index'] == 0) for p in imported_mesh['polygons']]
+    assert sum((a-b)**2 for a,b in zip(*normals)) > 0.5
+    bpy.data.objects.remove(imported_option, do_unlink=True)
 assert len(angle_obj.data.vertices) == 4 and len(break_obj.data.vertices) == 4
 bpy.data.objects.remove(break_obj, do_unlink=True)
 bpy.data.objects.remove(angle_obj, do_unlink=True)
@@ -103,25 +183,33 @@ bpy.data.objects.remove(over_object, do_unlink=True)
 mode_props = bpy.ops.export_scene.sfc_mod.get_rna_type().properties['output_mode']
 assert mode_props.default == 'AUTO'
 assert [item.identifier for item in mode_props.enum_items] == ['AUTO', 'STANDARD', 'BREAK']
+smoothing_props = bpy.ops.export_scene.sfc_mod.get_rna_type().properties['smoothing_mode']
+assert smoothing_props.default == 'KEEP'
+assert [item.identifier for item in smoothing_props.enum_items] == ['KEEP', 'DIRECT', 'SPLIT']
 class ExportLayoutRecorder:
     def __init__(self):
         self.labels = []
         self.properties = []
     def label(self, *, text):
         self.labels.append(text)
-    def prop(self, owner, name):
+    def prop(self, owner, name, **kwargs):
         self.properties.append(name)
 layout = ExportLayoutRecorder()
-addon.EXPORT_OT_sfc_mod.draw(type('FakeExport', (), {'layout': layout})(), None)
-assert layout.properties == ['output_mode']
+addon.EXPORT_OT_sfc_mod.draw(type('FakeExport', (), {'layout': layout, 'output_mode': 'AUTO', 'lod_count': 3})(), None)
+assert layout.properties == ['output_mode', 'smoothing_mode', 'distances', 'distances']
 assert any('Auto' in text for text in layout.labels)
 assert any('Standard' in text for text in layout.labels)
 assert any('Break' in text for text in layout.labels)
+assert all(text.startswith('- ') for text in layout.labels if any(word in text for word in ('Auto:', 'Standard:', 'Break:', 'Current:', 'Direct:', 'Split:')))
+break_layout = ExportLayoutRecorder()
+addon.EXPORT_OT_sfc_mod.draw(type('FakeExport', (), {'layout': break_layout, 'output_mode': 'BREAK', 'lod_count': 3})(), None)
+assert 'distances' not in break_layout.properties
 confirm_properties = bpy.ops.export_scene.sfc_mod_confirm.get_rna_type().properties
 assert confirm_properties['overwrite_standard'].default is True
 assert confirm_properties['overwrite_break'].default is True
-assert confirm_properties['modify_distances'].default is False
-assert confirm_properties['smoothing_mode'].default == 'NONE'
+assert 'modify_distances' not in confirm_properties
+assert 'modify_distances' not in bpy.ops.export_scene.sfc_mod.get_rna_type().properties
+assert 'smoothing_mode' not in confirm_properties
 with patch('builtins.open', side_effect=PermissionError('Access denied')) as denied_open:
     try:
         addon.open_export_temp(Path(tempfile.gettempdir()))
@@ -139,6 +227,94 @@ vertices = struct.pack('<9f', 0, 0, 0, 1, 0, 0, 0, 1, 0)
 corners = b''.join(struct.pack('<I3f2fI', i, 0, 0, 1, 0, 0, 0) for i in range(3))
 geometry = struct.pack('<II', 3, 1) + chunk(b'VTXS', vertices) + chunk(b'POLY', struct.pack('<II3f', 3, 0, 0, 0, 1) + corners)
 body = bytes(36) + chunk(b'STRS', strings) + chunk(b'PNTS', points) + chunk(b'MATS', material) + chunk(b'MOD0', geometry)
+with tempfile.TemporaryDirectory() as normal_folder:
+    verts = [(0., 0., 0.), (1., 0., 0.), (0., 1., 0.), (0., 0., 1.)]
+    triangles = [((0, 1, 2), (0., 0., 0.5)), ((1, 0, 3), (0., 1., 0.))]
+    polygons = []
+    for indices, normal in triangles:
+        records = b''.join(struct.pack('<I3f2fI', vertex, *((0., 0., 0.) if vertex == 2 else normal), 0., 0., 0) for vertex in indices)
+        polygons.append(chunk(b'POLY', struct.pack('<II3f', 3, 0, *normal) + records))
+    geom = struct.pack('<II', 4, 2) + chunk(b'VTXS', b''.join(struct.pack('<3f', *v) for v in verts)) + b''.join(polygons)
+    smooth_mat = struct.pack('<II2fIII', 2, 0xffffff, 1., 1., 0, 0, 0)
+    normal_body = bytes(36) + chunk(b'STRS', b'\0') + chunk(b'MATS', smooth_mat) + chunk(b'MOD0', geom)
+    normal_original = b'MDLS' + struct.pack('<I', len(normal_body)) + normal_body
+    for filename in ('normalfixture.mod', 'normalfixture_brk.mod'):
+        normal_path = Path(normal_folder) / filename
+        normal_path.write_bytes(normal_original)
+        before_flat = set(bpy.data.objects)
+        addon.import_model(bpy.context, str(normal_path), import_smoothing=False)
+        flat_import = next(o for o in set(bpy.data.objects) - before_flat if o.type == 'MESH')
+        assert not flat_import.data.has_custom_normals
+        assert all(not face.use_smooth for face in flat_import.data.polygons)
+        assert all(not edge.use_edge_sharp for edge in flat_import.data.edges)
+        if not filename.endswith('_brk.mod'):
+            untouched, _ = addon.prepare_standard_export(flat_import.users_collection[0], normal_path)
+            assert untouched == normal_original
+        bpy.data.objects.remove(flat_import, do_unlink=True)
+        before = set(bpy.data.objects)
+        addon.import_model(bpy.context, str(normal_path))
+        obj = next(o for o in set(bpy.data.objects) - before if o.type == 'MESH')
+        assert obj.data.has_custom_normals
+        assert len(obj.data.vertices) == 4
+        for face_index, face in enumerate(obj.data.polygons):
+            expected = triangles[face_index][1]
+            length = math.sqrt(sum(x*x for x in expected))
+            expected = tuple(x / length for x in expected)
+            for loop, original_corner in zip(face.loop_indices, (1, 0, 2)):
+                if triangles[face_index][0][original_corner] == 2:
+                    continue  # Blender resolves a zero normal automatically; source bytes must remain intact.
+                actual = obj.data.corner_normals[loop].vector
+                assert sum(a*b for a, b in zip(actual, expected)) > 0.9999
+        if not filename.endswith('_brk.mod'):
+            exported_normals, _ = addon.prepare_standard_export(obj.users_collection[0], normal_path)
+            assert exported_normals == normal_original
+            direct_output, _ = addon.prepare_standard_export(obj.users_collection[0], normal_path, direct_normals=True)
+            direct_mesh = addon.parse_model(direct_output)['meshes'][0]
+            for face_index, polygon in enumerate(direct_mesh['polygons']):
+                expected = triangles[face_index][1]
+                length = math.sqrt(sum(x*x for x in expected))
+                expected = tuple(x / length for x in expected)
+                for corner in polygon['corners']:
+                    if corner['index'] == 2:
+                        continue
+                    actual = struct.unpack_from('<3f', corner['raw'], 4)
+                    assert sum(a*b for a, b in zip(actual, expected)) > 0.9999
+        bpy.data.objects.remove(obj, do_unlink=True)
+    flat_mat = struct.pack('<II2fIII', 4, 0xffffff, 1., 1., 0, 0, 0)
+    flat_body = bytes(36) + chunk(b'STRS', b'\0') + chunk(b'MATS', flat_mat) + chunk(b'MOD0', geom)
+    flat_path = Path(normal_folder) / 'flatfixture.mod'
+    flat_path.write_bytes(b'MDLS' + struct.pack('<I', len(flat_body)) + flat_body)
+    before = set(bpy.data.objects)
+    addon.import_model(bpy.context, str(flat_path))
+    flat_obj = next(o for o in set(bpy.data.objects) - before if o.type == 'MESH')
+    assert all(not face.use_smooth for face in flat_obj.data.polygons)
+    bpy.data.objects.remove(flat_obj, do_unlink=True)
+with tempfile.TemporaryDirectory() as grouping_folder:
+    grouping_path = Path(grouping_folder) / 'groupfixture.mod'
+    grouping_strings = strings + b'a1\0otherpoint\0'
+    grouping_points = points + struct.pack('<3fI', 4, 5, 6, len(strings)) + struct.pack('<3fI', 7, 8, 9, len(strings) + 3)
+    grouping_body = bytes(36) + chunk(b'STRS', grouping_strings) + chunk(b'PNTS', grouping_points) + chunk(b'MATS', material) + chunk(b'MOD0', geometry)
+    grouping_original = b'MDLS' + struct.pack('<I', len(grouping_body)) + grouping_body
+    grouping_path.write_bytes(grouping_original)
+    addon.import_model(bpy.context, str(grouping_path))
+    group_model = bpy.data.collections['SFC MOD: groupfixture']
+    hard_group = next(c for c in group_model.children if c.name.startswith('HardPoints'))
+    damage_group = next(c for c in group_model.children if c.name.startswith('DamagePoints'))
+    hard = next(obj for obj in hard_group.objects if obj.get('mod_name') == 'hardpoint1')
+    damage = next(obj for obj in damage_group.objects if obj.get('mod_name') == 'a1')
+    assert any(obj.get('mod_name') == 'otherpoint' for obj in group_model.objects)
+    for selected in (hard, damage):
+        assert addon.find_export_models(bpy.context, selected)['standard'][0] == group_model
+    grouped_output, _ = addon.prepare_standard_export(group_model, grouping_path)
+    assert grouped_output == grouping_original
+    damage.location.x += 2.
+    edited, _ = addon.prepare_standard_export(group_model, grouping_path)
+    assert addon.parse_model(edited)['points'][1]['position'] != (4., 5., 6.)
+    for obj in list(group_model.all_objects):
+        bpy.data.objects.remove(obj, do_unlink=True)
+    for child in list(group_model.children):
+        bpy.data.collections.remove(child)
+    bpy.data.collections.remove(group_model)
 with tempfile.TemporaryDirectory() as folder:
     bpy.ops.object.select_all(action='DESELECT')
     bpy.ops.mesh.primitive_uv_sphere_add(segments=8, ring_count=4)
@@ -161,6 +337,7 @@ with tempfile.TemporaryDirectory() as folder:
     lod2.data = sphere.data.copy()
     lod2.name = 'testship_2'
     authored.objects.link(lod2)
+    assert addon.initial_lod_settings(bpy.context, sphere) == (2, (0., 100., 200., 300., 400.))
     point = bpy.data.objects.new('hardpoint1', None)
     point.location = (1., 2., 3.)
     authored.objects.link(point)
@@ -168,6 +345,28 @@ with tempfile.TemporaryDirectory() as folder:
     break_piece.data = sphere.data.copy()
     break_piece.name = 'testship_brk_1'
     authored.objects.link(break_piece)
+    authored_hard_group = bpy.data.collections.new('HardPoints')
+    authored_damage_group = bpy.data.collections.new('DamagePoints')
+    authored.children.link(authored_hard_group)
+    authored.children.link(authored_damage_group)
+    authored_hard_group.objects.link(point)
+    authored_damage = bpy.data.objects.new('a1', None)
+    authored_damage.location = (4., 5., 6.)
+    authored_damage_group.objects.link(authored_damage)
+    for selected in (point, authored_damage):
+        grouped_choices = addon.find_export_models(bpy.context, selected)
+        assert grouped_choices['standard'][0] == authored
+        assert grouped_choices['break'][0] == authored
+    grouped_standard, _ = addon.prepare_new_mesh_export(bpy.context, sphere, Path(folder) / 'grouped.mod')
+    grouped_points = addon.parse_model(grouped_standard)['points']
+    assert len(grouped_points) == 2
+    assert {p['name'] for p in grouped_points} == {'hardpoint1', 'a1'}
+    grouped_break, _ = addon.prepare_new_mesh_export(bpy.context, break_piece, Path(folder) / 'grouped_brk.mod', break_mode=True)
+    assert {p['name'] for p in addon.parse_model(grouped_break)['points']} == {'hardpoint1', 'a1'}
+    bpy.data.objects.remove(authored_damage, do_unlink=True)
+    authored_hard_group.objects.unlink(point)
+    bpy.data.collections.remove(authored_hard_group)
+    bpy.data.collections.remove(authored_damage_group)
     empty_break_mesh = bpy.data.meshes.new('empty authored break mesh')
     empty_break = bpy.data.objects.new('testship_brk_3', empty_break_mesh)
     authored.objects.link(empty_break)
@@ -207,7 +406,7 @@ with tempfile.TemporaryDirectory() as folder:
     _, authored_empty_warnings = addon.prepare_new_mesh_export(bpy.context, break_piece, Path(folder) / 'authored_brk.mod', break_mode=True)
     assert any('testship_brk_3' in warning and 'skip' in warning.lower() for warning in authored_empty_warnings)
     assert authored_model['points'][0]['name'] == 'hardpoint1'
-    assert authored_model['points'][0]['position'] == (1., 3., -2.)
+    assert authored_model['points'][0]['position'] == (-2., 3., -1.)
     assert authored_model['materials'][0]['diffuse'] == 'hull'
     assert authored_model['materials'][0]['illumination'] == 'hulli'
     auto_standard = Path(folder) / 'auto_ship.mod'
@@ -216,7 +415,6 @@ with tempfile.TemporaryDirectory() as folder:
     auto_break.write_bytes(b'original break')
     state = {'active': sphere.name, 'paths': {'standard': str(auto_standard), 'break': str(auto_break)},
              'snapshots': {str(p): addon.destination_snapshot(p) for p in (auto_standard, auto_break)}}
-    import json
     assert bpy.ops.export_scene.sfc_mod_confirm(payload=json.dumps(state), overwrite_standard=False, overwrite_break=False) == {'CANCELLED'}
     assert auto_standard.read_bytes() == b'original standard'
     assert auto_break.read_bytes() == b'original break'
@@ -272,7 +470,18 @@ with tempfile.TemporaryDirectory() as folder:
     assert len(next(o for o in created if o.type == 'MESH').data.materials) == 1
     exported, export_warnings = addon.prepare_standard_export(imported_collection, Path(folder) / 'export.mod')
     assert exported == original
+    assert 'mod_axis_convention' not in imported_collection
+    markerless_data, _ = addon.prepare_standard_export(imported_collection, Path(folder) / 'markerless.mod')
+    assert markerless_data == original
     exported_mesh = next(o for o in created if o.type == 'MESH')
+    imported_point = next(o for o in created if o.type == 'EMPTY')
+    assert tuple(imported_point.location) == (-3., -1., 2.)
+    bpy.ops.object.select_all(action='DESELECT')
+    exported_mesh.select_set(True)
+    bpy.context.view_layer.objects.active = exported_mesh
+    automatic_path = Path(folder) / 'automatic_lod_values.mod'
+    assert bpy.ops.export_scene.sfc_mod(filepath=str(automatic_path), output_mode='STANDARD') == {'FINISHED'}
+    assert automatic_path.read_bytes() == original
     new_lod = exported_mesh.copy()
     new_lod.data = exported_mesh.data.copy()
     del new_lod['mod_lod_index']
@@ -295,8 +504,8 @@ with tempfile.TemporaryDirectory() as folder:
     exported_mesh.location.x = 2.
     bpy.context.view_layer.update()
     transformed, _ = addon.prepare_standard_export(imported_collection, Path(folder) / 'transformed.mod')
-    assert addon.parse_model(transformed)['meshes'][0]['vertices'][0][0] == 2.
-    assert abs(struct.unpack_from('<f', transformed, 12)[0] - 3.) < 1e-5
+    assert abs(addon.parse_model(transformed)['meshes'][0]['vertices'][0][2] + 2.) < 1e-5
+    assert abs(struct.unpack_from('<f', transformed, 12)[0] - 5 ** 0.5) < 1e-5
     exported_mesh.location.x = 0.
     parent = bpy.data.objects.new('test parent', None)
     bpy.context.scene.collection.objects.link(parent)
@@ -304,7 +513,7 @@ with tempfile.TemporaryDirectory() as folder:
     exported_mesh.parent = parent
     bpy.context.view_layer.update()
     parented, _ = addon.prepare_standard_export(imported_collection, Path(folder) / 'parented.mod')
-    assert abs(addon.parse_model(parented)['meshes'][0]['vertices'][0][0] - 3.) < 1e-5
+    assert abs(addon.parse_model(parented)['meshes'][0]['vertices'][0][2] + 3.) < 1e-5
     exported_mesh.parent = None
     bpy.data.objects.remove(parent, do_unlink=True)
     exported_mesh.shape_key_add(name='Basis')
@@ -355,19 +564,20 @@ with tempfile.TemporaryDirectory() as folder:
     edited_standard, _ = addon.prepare_standard_export(imported_collection, Path(folder) / 'changed.mod')
     edited_standard_model = addon.parse_model(edited_standard)
     assert len(edited_standard_model['points']) == 2
-    assert any(p['name'] == 'damagepoint_new_standard' and p['position'] == (2., 4., -3.) for p in edited_standard_model['points'])
+    assert any(p['name'] == 'damagepoint_new_standard' and p['position'] == (-3., 4., -2.) for p in edited_standard_model['points'])
     assert len(edited_standard_model['materials']) == 3
     assert edited_standard_model['meshes'][0]['polygons'][0]['material'] == 1
     assert edited_standard_model['materials'][1]['diffuse'] == 'new_standard'
     assert edited_standard_model['materials'][1]['illumination'] == 'new_standard_i'
     assert edited_standard_model['materials'][2]['diffuse'] == 'foreign_texture'
     old_standard_point = next(obj for obj in created if obj.type == 'EMPTY')
-    imported_collection.objects.unlink(old_standard_point)
+    old_point_group = old_standard_point.users_collection[0]
+    old_point_group.objects.unlink(old_standard_point)
     removed_standard, _ = addon.prepare_standard_export(imported_collection, Path(folder) / 'changed.mod')
     removed_standard_model = addon.parse_model(removed_standard)
     assert len(removed_standard_model['points']) == 1
     assert removed_standard_model['points'][0]['name'] == 'damagepoint_new_standard'
-    imported_collection.objects.link(old_standard_point)
+    old_point_group.objects.link(old_standard_point)
     bpy.data.objects.remove(added_standard_point, do_unlink=True)
     exported_mesh.data.materials.pop(index=2)
     exported_mesh.data.materials.pop(index=1)
@@ -396,7 +606,7 @@ with tempfile.TemporaryDirectory() as folder:
     shader.inputs['Roughness'].default_value = old_roughness
     exported_mesh.data.uv_layers.active.data[0].uv = (0.5, 0.25)
     point = next(o for o in created if o.type == 'EMPTY')
-    point.location = (4., -6., 5.)
+    point.location = (-6., -4., 5.)
     point.rotation_euler.x = 0.25
     rotated_point_export, _ = addon.prepare_standard_export(imported_collection, Path(folder) / 'export.mod')
     assert addon.parse_model(rotated_point_export)['points'][0]['position'] == (4., 5., 6.)
@@ -503,7 +713,7 @@ with tempfile.TemporaryDirectory() as folder:
     changed_break, _ = addon.prepare_break_export(bpy.context, break_collection, break_path)
     changed_model = addon.parse_model(changed_break)
     assert len(changed_model['points']) == 2
-    assert any(p['name'] == 'damagepoint_new' and p['position'] == (2., 4., -3.) for p in changed_model['points'])
+    assert any(p['name'] == 'damagepoint_new' and p['position'] == (-3., 4., -2.) for p in changed_model['points'])
     assert changed_model['materials'][0]['diffuse'] == 'changed_break'
     assert len(changed_model['materials']) == 2
     assert changed_model['meshes'][0]['polygons'][0]['material'] == 1
@@ -512,7 +722,7 @@ with tempfile.TemporaryDirectory() as folder:
     illum_node = break_mat.node_tree.nodes.new('ShaderNodeTexImage')
     illum_node.image = changed_illum
     break_mat.node_tree.links.new(illum_node.outputs['Color'], break_shader.inputs['Emission Color'])
-    original_point = next(obj for obj in break_collection.objects if obj.type == 'EMPTY' and 'mod_point_index' in obj)
+    original_point = next(obj for obj in addon.model_point_objects(break_collection) if 'mod_point_index' in obj)
     bpy.data.objects.remove(original_point, do_unlink=True)
     pieces[0].data.materials.pop(index=1)
     bpy.context.view_layer.update()
@@ -553,7 +763,7 @@ with tempfile.TemporaryDirectory() as folder:
     warnings = addon.import_model(bpy.context, str(break_path))
     piece = next(o for o in set(bpy.data.objects) - before if o.type == 'MESH')
     assert piece['mod_pivot_name'] == 'object01pivot'
-    assert tuple(piece.location) == (1.0, -3.0, 2.0)
+    assert tuple(piece.location) == (-3.0, -1.0, 2.0)
     assert not any('pivot' in warning for warning in warnings)
     print('PASS numbered break pivot')
     blend_file = str(Path(folder) / 'metadata.blend')

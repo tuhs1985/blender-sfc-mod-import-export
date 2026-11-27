@@ -13,6 +13,10 @@ The importer SHALL create a separate mesh for each supported piece identifier wh
 - **WHEN** a break model contains seven valid piece identifiers
 - **THEN** Blender receives seven distinct piece objects named `<shipname>_brk_1` through `<shipname>_brk_7` with all polygons represented
 
+#### Scenario: Stored smoothing on break pieces
+- **WHEN** a break piece contains stored corner normals
+- **THEN** its Blender mesh displays their representable directions without welding the piece's vertices.
+
 ### Requirement: Handle pivot records
 The importer SHALL position a piece origin at a matching numbered pivot when unambiguous, and SHALL NOT warn when pivot records are absent.
 

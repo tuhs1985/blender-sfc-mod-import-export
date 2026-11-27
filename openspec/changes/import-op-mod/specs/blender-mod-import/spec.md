@@ -18,7 +18,26 @@ The importer SHALL represent valid named points as Blender empties with original
 
 #### Scenario: Hardpoint present
 - **WHEN** a valid model contains a named hardpoint
-- **THEN** an empty is created with the corresponding name and transformed position
+- **THEN** an empty is created with the corresponding name and transformed position in a HardPoints child collection
+
+#### Scenario: Damage point present
+- **WHEN** a valid model contains an `a1` through `f`-series damage point
+- **THEN** its empty is placed in a DamagePoints child collection; other named points remain directly in the model collection
+
+### Requirement: Display imported smoothing
+The importer SHALL offer an enabled-by-default Import Smoothing option that applies stored corner-normal directions to Blender's mesh shading while retaining source records for unchanged exports.
+
+#### Scenario: Import smoothing disabled
+- **WHEN** Import Smoothing is disabled for a standard or break model
+- **THEN** the imported mesh displays flat faces without custom normals, while original records remain available for unchanged standard export.
+
+#### Scenario: Shared vertex with different corner normals
+- **WHEN** adjacent smooth faces share a vertex but carry different normal directions
+- **THEN** Blender displays the stored directions without welding or detaching vertices.
+
+#### Scenario: Zero or non-unit normal
+- **WHEN** a stored normal is zero or non-unit length
+- **THEN** Blender may normalize or choose an automatic display direction, while the original record remains available for unchanged standard export.
 
 ### Requirement: Preserve material slots
 The importer SHALL preserve material table order and assign polygon material indices without discarding early or unused slots.

@@ -14,3 +14,8 @@
 ## 3. Integration
 
 - [x] 3.1 Run parser tests, Blender integration checks and strict OpenSpec validation; record the results.
+- [x] 3.2 Group imported hardpoints and damage points into separate child collections while preserving other named points and their original order.
+- [ ] 3.3 User-directed Blender check of the grouped points.
+- [x] 3.4 Restore imported corner-normal directions in Blender, retaining original raw records and flat material shading; check standard and break fixtures and local OP models.
+- [ ] 3.5 User-directed Blender check of imported smoothing and the v0.4.5 export-window changes.
+- [x] 3.6 Provide an optional, enabled-by-default import smoothing control; verify standard and break imports and original-data preservation when disabled.

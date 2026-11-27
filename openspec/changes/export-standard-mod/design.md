@@ -18,7 +18,9 @@ For Blender authoring, use LOD objects named `fca_1`, `fca_2`, etc., exported to
 
 Use five standard-model LODs as the user's working maximum assumption until further evidence, not as a proven OP limit or a new hard rejection. Break-piece counts are separate and have no assumed maximum; do not apply the LOD assumption to them.
 
-Keep imported LOD transition values, including populated values beyond the original LOD count. Initialize newly needed zero entries with D4v1ks' 100-unit baseline, extending from the preceding value where needed to avoid reversing the sequence. Authored models start at 0, 100, 200, 300, 400. An export dialog offers optional distance editing, disabled by default, alongside any overwrite choices. Exact runtime behavior remains to be verified.
+Use the original Max/SFC mapping: MOD `(x,y,z)` becomes Blender `(-z,-x,y)` and Blender `(x,y,z)` becomes MOD `(-y,z,-x)`, for geometry and named points alike. Apply it consistently to imported and authored standard and break models. The user explicitly declined compatibility with the previous v0.4.0 conversion; earlier scenes may need to be reimported or realigned.
+
+Keep imported LOD transition values, including populated values beyond the original LOD count. Initialize newly needed zero entries with D4v1ks' 100-unit baseline, extending from the preceding value where needed to avoid reversing the sequence. Authored models start at 0, 100, 200, 300, 400. The export file browser displays editable fields directly for existing LODs, prefilled with the model's values; the separate popup is reserved for existing-file overwrite choices. Exact runtime behavior remains to be verified.
 
 Alternatives considered: writing a file directly from scratch would require guessing unknown header fields; replaying an unchanged original would not export edits. An incremental lossless representation supports both future editing and safe preservation.
 

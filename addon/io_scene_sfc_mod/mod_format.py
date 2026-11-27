@@ -237,7 +237,7 @@ def rewrite_geometry(data, meshes):
         original = originals[source_index] if source_index is not None else None
         changed_vertices = original is None or mesh['vertices'] != original['vertices']
         positions_changed = positions_changed or changed_vertices
-        if (changed_vertices or len(mesh['polygons']) != len(original['polygons']) or
+        if not mesh.get('_normals_supplied') and (changed_vertices or len(mesh['polygons']) != len(original['polygons']) or
                 any([c['index'] for c in p['corners']] != [c['index'] for c in q['corners']]
                     for p, q in zip(mesh['polygons'], original['polygons']))):
             recalculate_normals(mesh)

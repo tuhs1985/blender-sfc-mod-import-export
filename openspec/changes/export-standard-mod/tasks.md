@@ -27,6 +27,8 @@
 - [x] 4.1c Close the multi-LOD viewer checkout based on the user's acceptance of the MOD Viewer result. The user also confirmed points and diffuse/illumination in game; separate edge-case tests are not required for closeout.
 - [x] 4.2 Resolve the closeout review: allow empty standard meshes, retain the user's unique numbering convention for LODs and break pieces, and document standard ASCII references and the post-smoothing 16-bit vertex limit. The user closed the speculative unknown-geometry question for OP after the installed-model scan found none.
 - [ ] 4.3 When the exporter is finished, prepare a sample for the user's optional OP test; record actual viewer and game results separately.
+- [x] 4.4 Correct the 90-degree forward-axis mismatch using the original Max/SFC conversion for imports, meshes and points. The user declined compatibility with the old conversion. Automated standard, break, point, transform and original-model checks pass; user-facing MOD Viewer validation remains separate.
+- [ ] 4.5 User-directed MOD Viewer validation of the corrected orientation and point placement.
 
 ## 5. Review findings
 
@@ -35,7 +37,11 @@
 - [x] 5.3 Investigate and update derived size metadata when geometry changes; retain unchanged source values for unchanged models.
 - [x] 5.4 Support standard-model transforms, evaluated geometry, and models without UV layers without judging mesh quality; allow the full 65,536-vertex index range.
 - [x] 5.5 Investigate non-ASCII string encoding: installed OP examples contain ASCII-only strings, so the game code page remains unknown; document the current add-on limitation without guessing.
-- [x] 5.6 Preserve imported LOD distances, initialize new distances using D4v1ks' 100-unit baseline, and offer an opt-in export dialog for editing them; verify serialization and Blender integration.
+- [x] 5.6 Preserve imported LOD distances, initialize new distances using D4v1ks' 100-unit baseline, and offer direct editing in the export file browser; verify serialization and Blender integration.
 - [x] 5.7 Close LOD transition checks based on the user's acceptance of the MOD Viewer checkout. Individual distance-triggered switching edge cases were not independently verified.
 - [x] 5.8 Document collection selection, separately imported standard and break pairing, and how to avoid ambiguous extra collection membership or duplicate imports. The user chose workflow instructions for now; the underlying selection behavior remains unchanged.
 - [x] 5.9 Create a proper user guide covering installation, import, editing, model collection grouping and naming, standard/break export modes, LOD settings, textures, overwrite choices and viewing export messages. Include the grouping workflow currently documented in the README.
+- [x] 5.10 Move LOD controls into the export browser and show the separate overwrite confirmation only for existing outputs; preserve source distances and propagate user edits through confirmation.
+- [ ] 5.11 User-directed interactive checkout of LOD controls and overwrite-only popup.
+- [x] 5.13 Remove the LOD enable checkbox, show distance fields directly and mark dropdown explanation lines as a dashed list.
+- [x] 5.12 Export named points from HardPoints and DamagePoints child collections, including when a grouped point is selected, while preserving points directly in the model collection.

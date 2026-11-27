@@ -13,9 +13,21 @@ The exporter SHALL write all supported LODs, named points, material assignments 
 - **WHEN** a supported three-LOD model is exported
 - **THEN** the file contains three ordered LODs and their assigned materials
 
+#### Scenario: Max/SFC orientation
+- **WHEN** a model is newly imported or authored
+- **THEN** meshes and point locations use the original Max/SFC axis conversion consistently.
+
+#### Scenario: Grouped point markers
+- **WHEN** named point empties are directly in the model collection or in its HardPoints and DamagePoints child collections
+- **THEN** export those points once each and permit selecting a grouped point to identify the model.
+
+#### Scenario: Exported collection
+- **WHEN** a model collection is exported
+- **THEN** use the same original Max/SFC axis conversion without selecting a previous-version fallback.
+
 #### Scenario: LOD distances
 - **WHEN** a standard model is exported
-- **THEN** imported distances are retained, newly needed empty entries use the 100-unit baseline, and a dialog offers optional distance editing disabled by default
+- **THEN** imported distances are retained, newly needed empty entries use the 100-unit baseline, and editable switching-distance fields appear directly in the export file browser without an enable checkbox
 
 #### Scenario: One mesh without an LOD name
 - **WHEN** a model collection contains one eligible mesh without an LOD-style name

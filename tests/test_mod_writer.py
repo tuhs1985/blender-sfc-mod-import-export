@@ -14,6 +14,20 @@ def chunk(tag, body):
 
 
 class WriterTests(unittest.TestCase):
+    def test_supplied_corner_normals_survive_geometry_rewrite(self):
+        geometry = self.geometry()
+        body = bytes(36) + chunk(b'MOD0', geometry)
+        data = b'MDLS' + struct.pack('<I', len(body)) + body
+        mesh = fmt.inspect_geometry(geometry)
+        mesh['vertices'][2] = (0., 1., 1.)
+        raw = bytearray(mesh['polygons'][0]['corners'][0]['raw'])
+        struct.pack_into('<3f', raw, 4, 1., 0., 0.)
+        mesh['polygons'][0]['corners'][0]['raw'] = bytes(raw)
+        mesh['_normals_supplied'] = True
+        output = fmt.rewrite_geometry(data, [mesh])
+        result = fmt.inspect_geometry(output[52:])
+        self.assertEqual(struct.unpack_from('<3f', result['polygons'][0]['corners'][0]['raw'], 4), (1., 0., 0.))
+
     def test_lod_distances_preserve_source_and_fill_new_entries(self):
         data = b'MDLS' + struct.pack('<I', 36) + struct.pack('<IfI6f', 512, 1., 3, 5., 0., 180., 350., 0., 0.)
         extended = fmt.update_lod_distances(data, old_count=3, new_count=5)
